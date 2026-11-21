@@ -1,1 +1,97 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Heist-Board</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-6"><div class="max-w-md w-full bg-slate-900 border border-sky-500/30 rounded-2xl p-6 text-center space-y-2"><h1 class="text-2xl font-black text-sky-400">Heist-Board</h1><p class="text-xs text-slate-400">Forged with App Forge God-Mode</p></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Heist Board</title>
+  <link rel="manifest" href="manifest.json?v=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;overscroll-behavior:none;}
+    .theme-tactical{background:radial-gradient(circle at 50% 20%,#1e1b4b 0%,#09090b 75%);}
+    .theme-cork{background-color:#452c1e;background-image:radial-gradient(#5c3a21 1px,transparent 1px);background-size:14px 14px;}
+    .theme-blueprint{background-color:#0c2340;background-image:linear-gradient(rgba(56,189,248,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.12) 1px,transparent 1px);background-size:24px 24px;}
+    .pin-dot{width:12px;height:12px;border-radius:9999px;background:#ef4444;border:2px solid #fecaca;box-shadow:0 2px 6px rgba(0,0,0,.7);}
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <header class="bg-zinc-950/95 border-b border-zinc-800 px-3 py-2 flex items-center justify-between gap-2 sticky top-0 z-30">
+    <div class="flex items-center gap-2 min-w-0 flex-1">
+      <span class="text-xs font-black tracking-widest text-rose-500 shrink-0">HEIST</span>
+      <select id="heistSelect" class="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs font-bold text-white truncate flex-1"></select>
+    </div>
+    <div id="headerActionSlots" class="flex items-center gap-1.5 shrink-0">
+      <button id="newHeistBtn" class="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-black">+ Heist</button>
+      <button id="themeCycleBtn" class="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-[11px] font-bold text-zinc-200">Theme</button>
+    </div>
+  </header>
+
+  <nav id="mainTabs" class="bg-zinc-950 border-b border-zinc-800 px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto">
+    <button data-tab="board" class="tab-btn px-3 py-1 rounded-lg bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs font-bold shrink-0">Board</button>
+    <button data-tab="setups" class="tab-btn px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0">Setups</button>
+    <button data-tab="crew" class="tab-btn px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0">Crew &amp; Cuts</button>
+  </nav>
+
+  <main class="flex-1 relative flex flex-col overflow-hidden">
+    <section id="view-board" class="flex-1 relative theme-tactical overflow-hidden min-h-[75vh]">
+      <svg id="stringLayer" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+      <div id="cardsLayer" class="absolute inset-0 z-20"></div>
+      <div class="absolute bottom-4 right-4 z-30 flex gap-2">
+        <button id="addCardBtn" class="px-4 py-2.5 rounded-xl bg-rose-600 shadow-xl text-white text-xs font-black border border-rose-400/50">+ Pin Card</button>
+      </div>
+      <div id="boardProgressBadge" class="absolute top-3 left-3 z-30 px-2.5 py-1 rounded-lg bg-black/75 border border-zinc-700 text-[11px] font-mono text-emerald-300">0% Ready</div>
+    </section>
+
+    <section id="view-setups" class="hidden p-3 space-y-2 overflow-y-auto flex-1"></section>
+
+    <section id="view-crew" class="hidden p-3 space-y-3 overflow-y-auto flex-1">
+      <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 space-y-2">
+        <div class="text-xs font-black uppercase tracking-wider text-amber-400">Heist Budget &amp; Take</div>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-[11px] text-zinc-400">Gross Take ($)<input id="grossTakeInput" type="number" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white font-mono"></label>
+          <label class="text-[11px] text-zinc-400">Materials / Overhead ($)<input id="overheadInput" type="number" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white font-mono"></label>
+        </div>
+        <div id="netSummaryBox" class="p-2.5 rounded-lg bg-black/60 border border-emerald-500/30 text-xs font-mono text-emerald-300"></div>
+      </div>
+      <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 space-y-2">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-black uppercase tracking-wider text-sky-400">Crew &amp; 1099 Cuts</span>
+          <button id="addCrewBtn" class="px-2.5 py-1 rounded-lg bg-sky-600 text-white text-[11px] font-bold">+ Member</button>
+        </div>
+        <div id="crewList" class="space-y-2"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="cardModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+    <div class="w-full max-w-md bg-zinc-950 border border-zinc-700 rounded-2xl p-4 space-y-3">
+      <div class="flex justify-between items-center">
+        <span id="modalHeading" class="text-xs font-black uppercase tracking-wider text-rose-400">Pin Card</span>
+        <button id="closeCardModal" class="px-2 py-1 rounded bg-zinc-800 text-xs text-zinc-300">Close</button>
+      </div>
+      <input id="cardTitleIn" placeholder="Card title (e.g. Site Moisture Test)" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white">
+      <div class="grid grid-cols-2 gap-2">
+        <select id="cardTypeIn" class="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-xs text-white">
+          <option value="INTEL">INTEL</option>
+          <option value="SETUP">SETUP</option>
+          <option value="FINALE">FINALE</option>
+        </select>
+        <select id="cardStatusIn" class="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-xs text-white">
+          <option value="OPEN">OPEN</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="DONE">DONE</option>
+        </select>
+      </div>
+      <select id="cardParentIn" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-xs text-white"></select>
+      <input id="cardLinkIn" placeholder="Optional link (Gmail, Drive, or Maps URL)" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white">
+      <textarea id="cardNotesIn" rows="3" placeholder="Specs, steps, or notes..." class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white"></textarea>
+      <div class="flex gap-2">
+        <button id="saveCardBtn" class="flex-1 py-2 rounded-xl bg-rose-600 text-white text-xs font-black">Save Card</button>
+        <button id="deleteCardBtn" class="px-3 py-2 rounded-xl bg-zinc-900 border border-rose-500/40 text-rose-300 text-xs font-bold hidden">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./board-engine.js?v=1"></script>
+</body>
+</html>
