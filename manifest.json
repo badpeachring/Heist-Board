@@ -1,0 +1,9 @@
+{
+  "name": "Heist Board",
+  "short_name": "Heist Board",
+  "start_url": "/Heist-Board/",
+  "scope": "/Heist-Board/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#18181b"
+}
