@@ -21,11 +21,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
   function applyRoleLayout() {
     const crew = inCrewView();
     ['heistSelect', 'newHeistBtn', 'themeCycleBtn'].forEach(id => $(id)?.classList.toggle('hidden', crew));
-    document.querySelectorAll('#mainTabs .tab-btn').forEach(b => {
-      const k = b.dataset.tab;
-      const allowCrew = k === 'cloud' || (k === 'cad' && !!activeMission?.holo);
-      b.classList.toggle('hidden', crew && !allowCrew);
-    });
+
     if (crew) {
       const curCad = !$('view-cad')?.classList.contains('hidden');
       if (!curCad || !activeMission?.holo) window.HeistBoard?.switchTab?.('cloud');
