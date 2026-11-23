@@ -7,28 +7,49 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
   window.__hbBossCrewLoaded = true;
   const $ = id => document.getElementById(id);
   const CREW_CODE_KEY = 'hb_active_crew_code_v1';
+  const CREW_MODE_KEY = 'hb_crew_mode_v1';
   const BOSS = (window.HEIST_BOSS_EMAIL || 'sethmcnab13@gmail.com').toLowerCase();
   const CFG = window.HEIST_FIREBASE_CONFIG || {};
   const HAS_KEY = !!(CFG.apiKey && !String(CFG.apiKey).startsWith('PASTE_'));
   const esc = s => String(s || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
-  let auth = null, db = null, user = null, isBoss = false, previewCrew = false;
-  let bossHeists = [], bossCodes = [], activeMission = null, activeCode = '';
+  let auth = null, db = null, user = null, isBoss = false;
+  let previewCrew = localStorage.getItem(CREW_MODE_KEY) === '1';
+  let bossHeists = [], bossCodes = [], activeMission = null, activeCode = localStorage.getItem(CREW_CODE_KEY) || '';
   let unsubs = [], crewUnsub = null;
 
-  const inCrewView = () => previewCrew || (HAS_KEY && !isBoss) || new URLSearchParams(location.search).has('code');
+  const hasUrlCode = () => new URLSearchParams(location.search).has('code');
+  const inCrewView = () => previewCrew || hasUrlCode() || (HAS_KEY && !isBoss);
+
+  function setCrewMode(on) {
+    previewCrew = !!on;
+    localStorage.setItem(CREW_MODE_KEY, previewCrew ? '1' : '0');
+    applyRoleLayout();
+    renderView();
+  }
 
   function applyRoleLayout() {
     const crew = inCrewView();
-    ['heistSelect', 'newHeistBtn', 'themeCycleBtn'].forEach(id => $(id)?.classList.toggle('hidden', crew));
-    document.querySelectorAll('#mainTabs .tab-btn').forEach(b => {
-      const k = b.dataset.tab;
-      b.classList.toggle('hidden', crew && k !== 'cloud');
+    const nav = $('mainTabs');
+    if (nav) {
+      nav.style.display = crew ? 'none' : '';
+      nav.classList.toggle('hidden', crew);
+    }
+    ['heistSelect', 'newHeistBtn', 'themeCycleBtn'].forEach(id => {
+      const el = $(id);
+      if (el) { el.style.display = crew ? 'none' : ''; el.classList.toggle('hidden', crew); }
     });
     document.querySelectorAll('main > section').forEach(s => {
-      if (crew && s.id !== 'view-cloud') s.classList.add('hidden');
+      if (crew) s.classList.toggle('hidden', s.id !== 'view-cloud');
     });
-    if (crew) window.HeistBoard?.switchTab?.('cloud');
+    if (crew) {
+      const vc = $('view-cloud');
+      if (vc && vc.classList.contains('hidden')) {
+        document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+        vc.classList.remove('hidden');
+        renderView();
+      }
+    }
     updateHeaderBtn();
   }
 
@@ -40,12 +61,13 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       b.className = 'px-2.5 py-1 rounded-lg bg-zinc-900 border border-sky-500/45 text-[10px] font-black text-sky-300 shrink-0';
       slot.prepend(b);
     }
-    b.textContent = isBoss ? (previewCrew ? 'Exit Crew View' : 'BOSS') : 'Boss Login';
-    b.onclick = () => {
-      if (isBoss && previewCrew) { previewCrew = false; applyRoleLayout(); renderView(); }
-      else if (isBoss) { window.HeistBoard?.switchTab?.('cloud'); }
-      else { openBossLogin(); }
-    };
+    if (inCrewView()) {
+      b.textContent = isBoss ? 'Exit Crew' : 'Boss Login';
+      b.onclick = () => isBoss ? setCrewMode(false) : openBossLogin();
+    } else {
+      b.textContent = isBoss ? 'BOSS' : 'Boss Login';
+      b.onclick = () => isBoss ? window.HeistBoard?.switchTab?.('cloud') : openBossLogin();
+    }
   }
 
   function openBossLogin() {
@@ -54,7 +76,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     if (!m) { m = document.createElement('div'); m.id = 'hbBossModal'; m.className = 'fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4'; document.body.appendChild(m); }
     m.innerHTML = `<div class='w-full max-w-sm bg-zinc-950 border border-rose-500/45 rounded-2xl p-4 space-y-3'>
       <div class='flex justify-between items-center'><span class='text-xs font-black uppercase text-rose-400'>Boss Admin Login</span><button id='bmClose' class='px-2 py-1 rounded bg-zinc-800 text-xs text-white'>Close</button></div>
-      <div class='text-[11px] text-zinc-400'>Restricted to <span class='text-white font-mono'>${esc(BOSS)}</span>. Crew members do not need a login—use Mission Code instead.</div>
+      <div class='text-[11px] text-zinc-400'>Restricted to <span class='text-white font-mono'>${esc(BOSS)}</span>. Crew members use a Mission Code—no account needed.</div>
       <button id='bmGoogle' class='w-full py-2.5 rounded-xl bg-white text-zinc-950 text-xs font-black'>Sign In with Google (${esc(BOSS)})</button>
       <div class='border-t border-zinc-800 pt-2.5 space-y-2'>
         <div class='text-[10px] text-zinc-400'>Or use your Skill Tree Firebase password:</div>
@@ -71,13 +93,13 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       try {
         const res = await signInWithPopup(auth, new GoogleAuthProvider());
         if (res.user.email.toLowerCase() !== BOSS) { await signOut(auth); fail('Access denied: Boss Gmail only.'); }
-        else m.classList.add('hidden');
+        else { setCrewMode(false); m.classList.add('hidden'); }
       } catch (e) { fail(e.message); }
     };
     $('bmGo').onclick = async () => {
       const em = $('bmEmail').value.trim().toLowerCase(), pw = $('bmPass').value;
       if (em !== BOSS) return fail('Restricted to ' + BOSS);
-      try { await signInWithEmailAndPassword(auth, em, pw); m.classList.add('hidden'); } catch (e) { fail(e.message); }
+      try { await signInWithEmailAndPassword(auth, em, pw); setCrewMode(false); m.classList.add('hidden'); } catch (e) { fail(e.message); }
     };
   }
 
@@ -104,7 +126,8 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
 
   async function loadMissionByCode(rawCode) {
     const code = String(rawCode || '').trim().toUpperCase();
-    if (!code || !db) return;
+    if (!code) return;
+    if (!db) return renderView('Firebase API key not yet added—code will sync once key is saved.');
     if (crewUnsub) { crewUnsub(); crewUnsub = null; }
     try {
       const ref = doc(db, 'hb_missions', code);
@@ -120,14 +143,13 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     } catch (e) { renderView('Code load error: ' + e.message); }
   }
 
-  async function createMissionCode(title, cards, includeHolo = true) {
+  async function createMissionCode(title, cards) {
     const code = genCode(title.split(' ')[0]);
-    const holo = includeHolo && window.HeistBoard?.getHoloState ? window.HeistBoard.getHoloState() : null;
     await setDoc(doc(db, 'hb_missions', code), {
-      title, role: 'check', cards, holo, updatedAt: Date.now()
+      title, role: 'check', cards, updatedAt: Date.now()
     });
     const link = `${location.origin}${location.pathname}?code=${code}`;
-    try { await navigator.clipboard.writeText(link); alert(`Crew Code Created: ${code}\nShareable link copied to clipboard!`); } catch { alert(`Crew Code Created: ${code}\nLink: ${link}`); }
+    try { await navigator.clipboard.writeText(link); alert(`Crew Code Created: ${code}\nLink copied to clipboard!`); } catch { alert(`Crew Code Created: ${code}\nLink: ${link}`); }
   }
 
   async function saveHeist(title, cards = []) {
@@ -150,15 +172,6 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
 
   function renderView(msg = '') {
     const host = $('view-cloud'); if (!host) return;
-    if (!HAS_KEY) {
-      host.innerHTML = `<div class='max-w-xl mx-auto bg-zinc-900 border border-amber-500/45 rounded-2xl p-4 space-y-2'>
-        <div class='text-xs font-black uppercase text-amber-300'>Waiting on Final Firebase API Key</div>
-        <div class='text-xs text-zinc-300'>Project <code>skill-tree-4cffd</code> is pre-wired. Copy the full <code>apiKey</code> line from Firebase Console and send it in chat to activate live Boss Login &amp; Crew Codes.</div>
-        <div class='text-[11px] text-cyan-300'>Your <strong>Room Holo</strong> tab and <strong>Asylum Ops</strong> already work locally right now.</div>
-      </div>`;
-      return;
-    }
-
     if (inCrewView()) {
       host.innerHTML = `<div class='max-w-xl mx-auto space-y-3 pb-10'>
         <div class='bg-zinc-900/95 border border-sky-500/45 rounded-2xl p-4 space-y-2.5'>
@@ -171,18 +184,27 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
           ${msg ? `<div class='text-[11px] font-mono text-rose-400'>${esc(msg)}</div>` : ''}
         </div>
         ${activeMission ? `<div class='bg-zinc-900/95 border border-emerald-500/40 rounded-2xl p-3 space-y-2.5'>
-          <div class='flex items-center justify-between gap-2'>
-            <div><div class='text-[10px] font-mono text-emerald-400'>ACTIVE MISSION • ${esc(activeMission.code)}</div><div class='text-base font-black text-white'>${esc(activeMission.title)}</div></div>
-          </div>
+          <div><div class='text-[10px] font-mono text-emerald-400'>ACTIVE MISSION • ${esc(activeMission.code)}</div><div class='text-base font-black text-white'>${esc(activeMission.title)}</div></div>
           <div class='space-y-2'>${(activeMission.cards || []).map(c => `<div data-crst='${c.id}' class='p-2.5 rounded-xl border cursor-pointer ${c.status === 'DONE' ? 'bg-emerald-950/35 border-emerald-500/45' : 'bg-zinc-950 border-zinc-800'}'><div class='flex items-center justify-between gap-2'><span class='text-xs font-black ${c.status === 'DONE' ? 'line-through text-emerald-300' : 'text-white'}'>${esc(c.title)}</span><span class='text-[10px] font-mono ${c.status === 'DONE' ? 'text-emerald-400' : 'text-amber-300'}'>${c.status}</span></div>${c.notes ? `<div class='text-[11px] text-zinc-300 mt-1'>${esc(c.notes)}</div>` : ''}</div>`).join('')}</div>
-        </div>` : `<div class='p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center text-xs text-zinc-400'>Blank slate. Paste a Mission Code above (or open a Boss link) to load your assigned work.</div>`}
+        </div>` : `<div class='p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center text-xs text-zinc-400'>Blank slate. Enter a Mission Code above (or open a Boss link) to load your assigned work.</div>`}
       </div>`;
       $('crJoinBtn').onclick = () => loadMissionByCode($('crCodeIn').value);
       host.querySelectorAll('[data-crst]').forEach(el => el.onclick = async () => {
+        if (!db || !activeMission) return;
         const cid = el.dataset.crst;
         const cards = (activeMission.cards || []).map(c => c.id === cid ? { ...c, status: c.status === 'DONE' ? 'OPEN' : 'DONE' } : c);
         await updateDoc(doc(db, 'hb_missions', activeMission.code), { cards, updatedAt: Date.now() });
       });
+      return;
+    }
+
+    if (!HAS_KEY) {
+      host.innerHTML = `<div class='max-w-xl mx-auto bg-zinc-900 border border-amber-500/45 rounded-2xl p-4 space-y-2.5'>
+        <div class='text-xs font-black uppercase text-amber-300'>Waiting on Final Firebase API Key</div>
+        <div class='text-xs text-zinc-300'>Paste your full Firebase <code>apiKey</code> in chat to enable live Boss Login &amp; Crew Codes.</div>
+        <button id='clTestCrewBtn' class='px-3 py-2 rounded-xl bg-sky-600 text-white text-xs font-black'>Preview Blank Crew Screen</button>
+      </div>`;
+      $('clTestCrewBtn').onclick = () => setCrewMode(true);
       return;
     }
 
@@ -205,12 +227,12 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       </div>
     </div>`;
 
-    $('bPrevCrew').onclick = () => { previewCrew = true; applyRoleLayout(); renderView(); };
+    $('bPrevCrew').onclick = () => setCrewMode(true);
     $('bSignOut').onclick = () => signOut(auth);
     $('bNewH').onclick = async () => { const t = prompt('Heist Title:'); if (t) await saveHeist(t.trim()); };
     $('bImpAsy').onclick = importAsylum;
-    host.querySelectorAll('[data-gch]').forEach(b => b.onclick = () => { const h = bossHeists.find(x => x.id === b.dataset.gch); if (h) createMissionCode(h.title, h.cards || [], true); });
-    host.querySelectorAll('[data-gco]').forEach(b => b.onclick = () => { const [hid, cid] = b.dataset.gco.split('|'); const h = bossHeists.find(x => x.id === hid); const c = h?.cards?.find(x => x.id === cid); if (c) createMissionCode(c.title, [c], confirm('Include 3D Room Hologram & Red Pins with this single objective?')); });
+    host.querySelectorAll('[data-gch]').forEach(b => b.onclick = () => { const h = bossHeists.find(x => x.id === b.dataset.gch); if (h) createMissionCode(h.title, h.cards || []); });
+    host.querySelectorAll('[data-gco]').forEach(b => b.onclick = () => { const [hid, cid] = b.dataset.gco.split('|'); const h = bossHeists.find(x => x.id === hid); const c = h?.cards?.find(x => x.id === cid); if (c) createMissionCode(c.title, [c]); });
     host.querySelectorAll('[data-addo]').forEach(b => b.onclick = async () => { const h = bossHeists.find(x => x.id === b.dataset.addo); const t = prompt('Objective title:'); if (!h || !t) return; const n = prompt('Instructions:') || ''; await updateDoc(doc(db, 'hb_heists', h.id), { cards: [...(h.cards || []), { id: 'c_' + Date.now(), title: t.trim(), status: 'OPEN', notes: n.trim() }], updatedAt: Date.now() }); });
     host.querySelectorAll('[data-delh]').forEach(b => b.onclick = async () => { if (confirm('Delete Boss heist?')) await deleteDoc(doc(db, 'hb_heists', b.dataset.delh)); });
     host.querySelectorAll('[data-cpl]').forEach(b => b.onclick = () => { const url = `${location.origin}${location.pathname}?code=${b.dataset.cpl}`; navigator.clipboard?.writeText(url); alert('Copied: ' + url); });
@@ -225,26 +247,24 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     btn.textContent = 'Crew Codes'; nav.appendChild(btn);
     const sec = document.createElement('section'); sec.id = 'view-cloud'; sec.className = 'hidden p-3 overflow-y-auto flex-1'; main.appendChild(sec);
     nav.addEventListener('click', e => { if (e.target.closest('.tab-btn')?.dataset.tab === 'cloud') renderView(); });
-    setInterval(() => { if (inCrewView()) applyRoleLayout(); }, 1500);
+    setInterval(() => applyRoleLayout(), 600);
+    applyRoleLayout(); renderView();
 
     window.HeistBoard = window.HeistBoard || {};
     window.HeistBoard.isCrewMode = inCrewView;
-    window.HeistBoard.syncCrewPins = async pins => {
-      if (activeMission?.code && db) await updateDoc(doc(db, 'hb_missions', activeMission.code), { 'holo.pins': pins, updatedAt: Date.now() }).catch(() => {});
-    };
 
     if (HAS_KEY) {
       const app = getApps().length ? getApps()[0] : initializeApp(CFG);
       auth = getAuth(app); db = getFirestore(app);
-      const urlCode = new URLSearchParams(location.search).get('code') || localStorage.getItem(CREW_CODE_KEY) || '';
+      const urlCode = new URLSearchParams(location.search).get('code') || activeCode;
       onAuthStateChanged(auth, u => {
         user = u;
         isBoss = !!(u?.email && u.email.toLowerCase() === BOSS);
-        if (isBoss) { previewCrew = false; startBossStreams(); }
+        if (isBoss) { previewCrew = false; localStorage.setItem(CREW_MODE_KEY, '0'); startBossStreams(); }
         else if (urlCode) { loadMissionByCode(urlCode); }
         applyRoleLayout(); renderView();
       });
-    } else { applyRoleLayout(); renderView(); }
+    }
   }
   init();
 })();
