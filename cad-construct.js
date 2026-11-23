@@ -84,11 +84,7 @@
     const screedMat = makeMat(0xd97706, { rough: 0.8 });
     addPart(new THREE.BoxGeometry(W - 0.08, 0.16, 0.12), screedMat, [0, 0.15, -L / 2 + 0.08], { name: 'Permanent Wood Screed Rails (2x4 Ripped)', cat: 'Phase 1', dims: '3/4" x 1-1/2" or 3/4" x 1"', spec: '2-1/2" Grip-Rite masonry nails into mortar joints every 18-24". Left in place for encapsulation.', exp: 0.55 });
     addPart(new THREE.BoxGeometry(W - 0.08, 0.16, 0.12), screedMat, [0, 0.15, L / 2 - 0.08], { name: 'Permanent Wood Screed Rails (South)', cat: 'Phase 1', dims: 'Flush to laser chalk line', spec: 'Packed with wet VersaBond where mortar joints miss.', exp: 0.55 });
-    addPart(new THREE.BoxGeometry(W, 0.12, L), makeMat(0x9ca3af, { rough: 0.85, op: 0.88 }), [0, 0.28, 0], { name: 'VersaBond Slurry + Quikrete #100450 Patch', cat: 'Phase 2', dims: '70-90 bags • 65-102 gal total water', spec: 'Pour wet-on-wet within 15-20 min; FANS OFF during pour, then SETUP FANS 48-72 hrs after 2-hr set.', exp: 1.15 });
-    addPart(new THREE.BoxGeometry(W, 0.07, L), makeMat(0x64748b, { rough: 0.6, op: 0.9 }), [0, 0.42, 0], { name: 'DRYLOK Extreme Gray Waterproof Barrier', cat: 'Phase 4.1', dims: '~100 sq ft/gal • 3/4" nap roller', spec: 'Apply over dry concrete patch + wood screed strips. SETUP FANS for 2-hr recoat window.', exp: 1.75 });
-    addPart(new THREE.BoxGeometry(W, 0.10, L), makeMat(0x18181b, { rough: 0.35, metal: 0.15 }), [0, 0.56, 0], { name: 'VRP-111 + 1/4" Liquid Rubber Border + Black Topcoat', cat: 'Phase 4.3', dims: '9 ft (3 walls) / 11 ft (entry) = 1,750 sq ft', spec: 'Seamless encapsulated perimeter border + solid black aliphatic topcoat. Indirect cross-vent fans.', exp: 2.35 });
-    addPart(new THREE.BoxGeometry(2.9, 0.08, 4.5), makeMat(0xffffff, { rough: 0.3, map: glMode ? null : makeCheckerTex() }), [0, 0.72, 0.1], { name: 'Centered 4\'x4\' Black & White Checkerboard', cat: 'Phase 4.4', dims: '29 ft x 45 ft (1,305 sq ft)', spec: 'Grind + prime + 2 coats white (SETUP FANS) + ScotchBlue 4\'x4\' tape + 2 coats black.', exp: 3.05 });
-    addPart(new THREE.BoxGeometry(W, 0.04, L), makeMat(0x38bdf8, { rough: 0.1, metal: 0.2, op: 0.28 }), [0, 0.86, 0], { name: 'Clear Aliphatic Protective Wear Coat', cat: 'Phase 4.4 Final', dims: '3,055 sq ft unified sheen', spec: 'SETUP FANS indirect airflow: 24 hr min foot traffic, 48-72 hrs before heavy event load-in.', exp: 3.65 });
+
   }
 
   function buildWatch() {
