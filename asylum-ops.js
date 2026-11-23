@@ -1,6 +1,5 @@
 (() => {
-  if (window.__hbAsylumLoaded) return;
-  window.__hbAsylumLoaded = true;
+
   const STORE = 'hb_asylum_masonic_v3';
   const PREV = 'hb_asylum_masonic_v2';
   const $ = id => document.getElementById(id);
