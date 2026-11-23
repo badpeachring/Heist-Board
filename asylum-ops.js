@@ -1,8 +1,7 @@
 (() => {
-  if (window.__hbAsylumVer === 5) return;
-  window.__hbAsylumVer = 5;
+  if (window.__hbAsylumVer === 6) return;
+  window.__hbAsylumVer = 6;
   const STORE = 'hb_asylum_masonic_v4';
-  const PREV = 'hb_asylum_masonic_v3';
   const $ = id => document.getElementById(id);
 
   const MANIFEST = [
@@ -64,15 +63,35 @@
   ];
 
   let state = (() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
-      if (saved) return saved;
-      const old = JSON.parse(localStorage.getItem(PREV) || 'null');
-      return { done: old?.done || {}, tramex: old?.tramex || '' };
-    } catch { return { done: {}, tramex: '' }; }
+    try { return { done: {}, tramex: '', ...JSON.parse(localStorage.getItem(STORE) || '{}') }; }
+    catch { return { done: {}, tramex: '' }; }
   })();
   let overrideLock = false;
   const save = () => localStorage.setItem(STORE, JSON.stringify(state));
+
+  function getFullSteps() {
+    const out = [];
+    PHASES.forEach(ph => ph.steps.forEach(s => {
+      out.push({
+        id: s.id, phase: ph.code, phaseTitle: ph.title, tag: s.tag || '',
+        title: `${s.id.split('_')[0]} • ${s.title}`,
+        details: s.details,
+        notes: s.details.map(d => '• ' + d).join('\n'),
+        status: state.done[s.id] ? 'DONE' : 'OPEN'
+      });
+    }));
+    return out;
+  }
+
+  function applyRemoteCards(cards) {
+    if (!Array.isArray(cards)) return;
+    let changed = false;
+    cards.forEach(c => {
+      const isDone = c.status === 'DONE';
+      if (!!state.done[c.id] !== isDone) { state.done[c.id] = isDone; changed = true; }
+    });
+    if (changed) { save(); if (!$('view-asylum')?.classList.contains('hidden')) renderAsylum(); }
+  }
 
   function calcStats() {
     const all = PHASES.flatMap(p => p.steps);
@@ -97,8 +116,8 @@
     host.innerHTML = `<div class='max-w-xl mx-auto space-y-3 pb-10'>
       <div class='bg-zinc-900/95 border border-rose-500/40 rounded-2xl p-3 space-y-2.5'>
         <div class='flex items-start justify-between gap-2'>
-          <div><div class='text-[10px] font-mono uppercase tracking-widest text-rose-400'>Masonic Lodge • Waco, TX • 3rd Floor (47' x 65')</div><div class='text-base font-black text-white'>THE ASYLUM — MASTER SPEC (980 SQ FT)</div></div>
-          <button id='asyOpenCadBtn' class='px-2.5 py-1.5 rounded-xl bg-emerald-600/25 border border-emerald-400/50 text-emerald-200 text-[10px] font-black shrink-0'>3D Material Plane</button>
+          <div><div class='text-[10px] font-mono uppercase tracking-widest text-rose-400'>Masonic Lodge • Waco, TX • Live Synced to Crew</div><div class='text-base font-black text-white'>THE ASYLUM — MASTER SPEC (980 SQ FT)</div></div>
+          <button id='asyOpenCadBtn' class='px-2.5 py-1.5 rounded-xl bg-emerald-600/25 border border-emerald-400/50 text-emerald-200 text-[10px] font-black shrink-0'>Room Holo</button>
         </div>
         <div class='p-2 rounded-xl bg-amber-950/45 border border-amber-500/45 text-[10px] font-mono text-amber-200'><strong>COMPATIBILITY RULE:</strong> NO DRYLOK Extreme. Apply Tufflex VRP-111 directly on bare, ground/dry concrete &amp; wood screed strips once Tramex &lt;= 4.5%.</div>
         <div class='flex items-center justify-between text-xs'><span class='font-black text-amber-300'>Progress: ${st.done}/${st.total} Steps (${st.pct}%)</span><span class='font-mono text-[10px] ${st.tramexOk ? 'text-emerald-400' : 'text-rose-400'}'>Tramex: ${state.tramex === '' ? 'Not Logged' : state.tramex + '%'}</span></div>
@@ -145,7 +164,11 @@
     $('asyTramexIn').onchange = e => { state.tramex = e.target.value.trim(); save(); renderAsylum(); };
     $('asyOpenCadBtn').onclick = () => switchTabUnified('cad');
     if ($('hbAsyUnlock')) $('hbAsyUnlock').onclick = () => { overrideLock = true; renderAsylum(); };
-    host.querySelectorAll('[data-step]').forEach(el => el.onclick = () => { state.done[el.dataset.step] = !state.done[el.dataset.step]; save(); renderAsylum(); });
+    host.querySelectorAll('[data-step]').forEach(el => el.onclick = () => {
+      const sid = el.dataset.step;
+      state.done[sid] = !state.done[sid]; save(); renderAsylum();
+      window.HeistBoard?.pushAsylumStepStatus?.(sid, state.done[sid]);
+    });
   }
 
   function switchTabUnified(tab) {
@@ -173,17 +196,14 @@
     if (!nav || !main) return;
     nav.querySelectorAll('[data-tab="asylum"]').forEach(el => el.remove());
     $('view-asylum')?.remove();
-    const btn = document.createElement('button');
-    btn.dataset.tab = 'asylum';
+    const btn = document.createElement('button'); btn.dataset.tab = 'asylum';
     btn.className = 'tab-btn px-2.5 py-1 rounded-lg bg-zinc-900 border border-amber-500/50 text-amber-300 text-xs font-bold shrink-0';
-    btn.textContent = 'Asylum Ops';
-    nav.appendChild(btn);
-    const sec = document.createElement('section');
-    sec.id = 'view-asylum';
-    sec.className = 'hidden p-3 overflow-y-auto flex-1';
-    main.appendChild(sec);
+    btn.textContent = 'Asylum Ops'; nav.appendChild(btn);
+    const sec = document.createElement('section'); sec.id = 'view-asylum'; sec.className = 'hidden p-3 overflow-y-auto flex-1'; main.appendChild(sec);
     nav.addEventListener('click', e => { const b = e.target.closest('.tab-btn'); if (b) switchTabUnified(b.dataset.tab); });
-    if (window.HeistBoard) window.HeistBoard.switchTab = switchTabUnified;
+    window.HeistBoard = window.HeistBoard || {};
+    window.HeistBoard.switchTab = switchTabUnified;
+    window.HeistBoard.asylumBridge = { getFullSteps, applyRemoteCards };
   }
   init();
 })();
