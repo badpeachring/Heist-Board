@@ -1,10 +1,6 @@
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-
-(() => {
-  if (window.__hbGoalEngineV1) return;
-  window.__hbGoalEngineV1 = true;
+(async () => {
+  if (window.__hbGoalEngineV2) return;
+  window.__hbGoalEngineV2 = true;
   const $ = id => document.getElementById(id);
   const BOSS = (window.HEIST_BOSS_EMAIL || 'sethmcnab13@gmail.com').toLowerCase();
   const CFG = window.HEIST_FIREBASE_CONFIG || {};
@@ -13,9 +9,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
   const fmtMoney = n => '$' + Math.round(Number(n) || 0).toLocaleString();
   const fmtTime = ts => ts ? new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
-  const app = getApps().length ? getApps()[0] : initializeApp(CFG);
-  const auth = getAuth(app), db = getFirestore(app);
-
+  let fb = null, auth = null, db = null;
   let user = null, isBoss = false, previewCrewId = '', activeTab = 'goals', stepFilter = 'ALL';
   let bossGoals = [], bossFinances = {}, crewRoster = [];
   let myCrewId = localStorage.getItem(CREW_ID_KEY) || '', myVault = null;
@@ -26,6 +20,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
   const inBossUi = () => isBoss && !previewCrewId;
   const actorName = () => inBossUi() ? 'Boss' : (myVault?.name || 'Crew');
   const genToken = p => { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let o = (p.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 6) || 'ID') + '-'; for (let i = 0; i < 8; i++) o += c[Math.floor(Math.random() * c.length)]; return o; };
+  const safeWrite = async fn => { try { await fn(); } catch (e) { alert('Firebase Write Error: ' + e.message); } };
 
   function makeAsylumStarter() {
     const cells = [];
@@ -96,7 +91,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
 
   function setPrimaryTab(tab) {
     activeTab = tab;
-    const ids = ['goals', 'holo', 'cuts'];
+    $('hbLegacyBar')?.classList.add('hidden');
     document.querySelectorAll('#hbPrimaryNav .ptab-btn').forEach(b => {
       const on = b.dataset.ptab === tab;
       b.className = on ? 'ptab-btn px-3 py-1.5 rounded-xl bg-rose-600/25 border border-rose-400 text-white text-xs font-black shrink-0' : 'ptab-btn px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-bold shrink-0';
@@ -117,62 +112,64 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     if (cutsBtn) cutsBtn.classList.toggle('hidden', !bossUi);
     const ab = $('hbAuthBtn');
     if (isBoss && previewCrewId) { ab.textContent = 'Exit Preview'; ab.onclick = () => { previewCrewId = ''; myVault = null; vaultUnsub?.(); vaultUnsub = null; updateChrome(); selectGoal(bossGoals[0]?.id || ''); setPrimaryTab('cuts'); }; }
-    else if (isBoss) { ab.textContent = 'Sign Out'; ab.onclick = () => signOut(auth); }
+    else if (isBoss) { ab.textContent = 'Sign Out'; ab.onclick = () => fb.signOut(auth); }
     else { ab.textContent = 'Boss Login'; ab.onclick = openBossLogin; }
   }
 
   function openBossLogin() {
+    if (!auth) return alert('Firebase still connecting—wait 2 seconds and tap again.');
     let m = $('hbLoginMod');
     if (!m) { m = document.createElement('div'); m.id = 'hbLoginMod'; m.className = 'fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4'; document.body.appendChild(m); }
     m.innerHTML = `<div class='w-full max-w-sm bg-zinc-950 border border-rose-500/45 rounded-2xl p-4 space-y-3'><div class='flex justify-between items-center'><span class='text-xs font-black uppercase text-rose-400'>Boss Admin Login</span><button id='lmX' class='px-2.5 py-1 rounded-lg bg-zinc-800 text-xs text-white'>Close</button></div><div class='text-[11px] text-zinc-400'>Boss access locked to <span class='text-white font-mono'>${esc(BOSS)}</span>.</div><button id='lmG' class='w-full py-2.5 rounded-xl bg-white text-zinc-950 text-xs font-black'>Sign In with Google</button><div class='border-t border-zinc-800 pt-2.5 space-y-2'><input id='lmEm' type='email' value='${esc(BOSS)}' class='w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white'><input id='lmPw' type='password' placeholder='Skill Tree / Firebase Password' class='w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white'><button id='lmGo' class='w-full py-2 rounded-xl bg-rose-600 text-white text-xs font-black'>Sign In</button></div><div id='lmErr' class='hidden text-[11px] font-mono text-rose-400'></div></div>`;
     m.classList.remove('hidden'); $('lmX').onclick = () => m.classList.add('hidden');
     const err = s => { $('lmErr').textContent = s; $('lmErr').classList.remove('hidden'); };
-    $('lmG').onclick = async () => { try { const r = await signInWithPopup(auth, new GoogleAuthProvider()); if (r.user.email.toLowerCase() !== BOSS) { await signOut(auth); err('Boss Gmail only.'); } else m.classList.add('hidden'); } catch (e) { err(e.message); } };
-    $('lmGo').onclick = async () => { try { await signInWithEmailAndPassword(auth, $('lmEm').value.trim().toLowerCase(), $('lmPw').value); m.classList.add('hidden'); } catch (e) { err(e.message); } };
+    $('lmG').onclick = async () => { try { const r = await fb.signInWithPopup(auth, new fb.GoogleAuthProvider()); if (r.user.email.toLowerCase() !== BOSS) { await fb.signOut(auth); err('Boss Gmail only.'); } else m.classList.add('hidden'); } catch (e) { err(e.message); } };
+    $('lmGo').onclick = async () => { try { await fb.signInWithEmailAndPassword(auth, $('lmEm').value.trim().toLowerCase(), $('lmPw').value); m.classList.add('hidden'); } catch (e) { err(e.message); } };
   }
 
   async function saveActiveHolos(nextHolos) {
-    if (!activeGoal) return;
-    await updateDoc(doc(db, 'hb_goals', activeGoal.id), { holos: nextHolos, updatedAt: Date.now() }).catch(e => alert('Holo sync error: ' + e.message));
+    if (!activeGoal || !db) return;
+    await safeWrite(() => fb.updateDoc(fb.doc(db, 'hb_goals', activeGoal.id), { holos: nextHolos, updatedAt: Date.now() }));
   }
 
   function selectGoal(gid) {
     activeGoalId = gid || '';
     goalUnsub?.(); goalUnsub = null;
-    if (!activeGoalId) { activeGoal = null; renderGoals(); window.HeistHolo?.syncGoal(null); return; }
-    goalUnsub = onSnapshot(doc(db, 'hb_goals', activeGoalId), snap => {
+    if (!activeGoalId || !db) { activeGoal = null; renderGoals(); window.HeistHolo?.syncGoal(null); return; }
+    goalUnsub = fb.onSnapshot(fb.doc(db, 'hb_goals', activeGoalId), snap => {
       activeGoal = snap.exists() ? { id: snap.id, ...snap.data() } : null;
       renderGoals();
       window.HeistHolo?.syncGoal(activeGoal, { isBoss: inBossUi(), actorName: actorName(), onSaveHolos: saveActiveHolos });
-    });
+    }, err => renderGoals('Firestore read error: ' + err.message));
   }
 
   function connectCrewVault(rawId, isPreview = false) {
     const cid = String(rawId || '').trim().toUpperCase();
-    if (!cid) return;
+    if (!cid || !db) return;
     vaultUnsub?.(); vaultUnsub = null;
     if (isPreview) previewCrewId = cid; else { myCrewId = cid; localStorage.setItem(CREW_ID_KEY, cid); }
-    vaultUnsub = onSnapshot(doc(db, 'hb_crew_vault', cid), snap => {
+    vaultUnsub = fb.onSnapshot(fb.doc(db, 'hb_crew_vault', cid), snap => {
       if (!snap.exists()) { myVault = null; updateChrome(); renderGoals('Crew ID not found: ' + cid); return; }
       myVault = { crewId: snap.id, ...snap.data() };
       const list = myVault.assignedGoals || [];
       if (!activeGoalId || !list.some(g => g.goalId === activeGoalId)) selectGoal(list[0]?.goalId || guestCodes[0] || '');
       updateChrome(); renderGoals();
-    });
+    }, err => renderGoals('Vault read error: ' + err.message));
   }
 
   function startBossStreams() {
     bossUnsubs.forEach(u => { try { u(); } catch {} }); bossUnsubs = [];
-    bossUnsubs.push(onSnapshot(collection(db, 'hb_goals'), s => {
+    if (!db) return;
+    bossUnsubs.push(fb.onSnapshot(fb.collection(db, 'hb_goals'), s => {
       bossGoals = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       if (inBossUi() && (!activeGoalId || !bossGoals.some(g => g.id === activeGoalId))) selectGoal(bossGoals[0]?.id || '');
       renderGoals(); if (activeTab === 'cuts') renderBossCuts();
-    }));
-    bossUnsubs.push(onSnapshot(collection(db, 'hb_boss_finances'), s => {
+    }, e => renderGoals('Goals stream error: ' + e.message)));
+    bossUnsubs.push(fb.onSnapshot(fb.collection(db, 'hb_boss_finances'), s => {
       bossFinances = {}; s.docs.forEach(d => { bossFinances[d.id] = d.data(); });
       if (activeTab === 'cuts') renderBossCuts();
     }));
-    bossUnsubs.push(onSnapshot(collection(db, 'hb_crew_vault'), s => {
+    bossUnsubs.push(fb.onSnapshot(fb.collection(db, 'hb_crew_vault'), s => {
       crewRoster = s.docs.map(d => ({ crewId: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       if (activeTab === 'cuts') renderBossCuts();
     }));
@@ -199,13 +196,13 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       if (step) { const idx = ph.steps.findIndex(x => x.id === step.id); if (idx >= 0) ph.steps[idx] = { ...ph.steps[idx], title, tag: $('smTag').value, details, link: $('smL').value.trim() }; }
       else ph.steps.push({ id: 's_' + Date.now(), title, tag: $('smTag').value, status: 'OPEN', details, link: $('smL').value.trim() });
       m.classList.add('hidden');
-      await updateDoc(doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() });
+      await safeWrite(() => fb.updateDoc(fb.doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() }));
     };
     if ($('smDel')) $('smDel').onclick = async () => {
       const phases = JSON.parse(JSON.stringify(activeGoal.phases || []));
       phases[phaseIdx].steps = phases[phaseIdx].steps.filter(x => x.id !== step.id);
       m.classList.add('hidden');
-      await updateDoc(doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() });
+      await safeWrite(() => fb.updateDoc(fb.doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() }));
     };
   }
 
@@ -218,7 +215,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       try {
         const obj = JSON.parse($('imTxt').value.trim());
         const id = (obj.id || genToken(obj.title || 'GOAL')).toUpperCase();
-        await setDoc(doc(db, 'hb_goals', id), { ...obj, id, updatedAt: Date.now() });
+        await safeWrite(() => fb.setDoc(fb.doc(db, 'hb_goals', id), { ...obj, id, updatedAt: Date.now() }));
         m.classList.add('hidden'); selectGoal(id);
       } catch (e) { alert('Invalid JSON: ' + e.message); }
     };
@@ -239,15 +236,17 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     m.classList.remove('hidden'); $('shX').onclick = () => m.classList.add('hidden');
     $('shCopyGuest').onclick = () => { navigator.clipboard?.writeText(guestUrl); alert('Copied Guest Link:\n' + guestUrl); };
     $('shSaveAsg').onclick = async () => {
-      for (const cb of m.querySelectorAll('[data-asg]')) {
-        const c = crewRoster.find(x => x.crewId === cb.dataset.asg); if (!c) continue;
-        let list = [...(c.assignedGoals || [])];
-        const has = list.some(g => g.goalId === activeGoal.id);
-        if (cb.checked && !has) list.push({ goalId: activeGoal.id, title: activeGoal.title, estCut: 0, pct: 0 });
-        if (!cb.checked && has) list = list.filter(g => g.goalId !== activeGoal.id);
-        await setDoc(doc(db, 'hb_crew_vault', c.crewId), { ...c, assignedGoals: list, updatedAt: Date.now() });
-      }
-      m.classList.add('hidden'); alert('Crew assignments synced live!');
+      await safeWrite(async () => {
+        for (const cb of m.querySelectorAll('[data-asg]')) {
+          const c = crewRoster.find(x => x.crewId === cb.dataset.asg); if (!c) continue;
+          let list = [...(c.assignedGoals || [])];
+          const has = list.some(g => g.goalId === activeGoal.id);
+          if (cb.checked && !has) list.push({ goalId: activeGoal.id, title: activeGoal.title, estCut: 0, pct: 0 });
+          if (!cb.checked && has) list = list.filter(g => g.goalId !== activeGoal.id);
+          await fb.setDoc(fb.doc(db, 'hb_crew_vault', c.crewId), { ...c, assignedGoals: list, updatedAt: Date.now() });
+        }
+        m.classList.add('hidden'); alert('Crew assignments synced live!');
+      });
     };
   }
 
@@ -323,27 +322,30 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       <div class='bg-zinc-900/95 border border-sky-500/40 rounded-2xl p-3 space-y-2.5'>
         <div class='flex items-center justify-between gap-2'><span class='text-[10px] font-mono uppercase tracking-widest text-sky-400'>${bossUi ? 'Boss Goals' : 'Saved Goal Nodes'} (${nodeList.length})</span>${bossUi ? `<div class='flex gap-1.5'><button id='gNewBtn' class='px-2 py-1 rounded-lg bg-rose-600 text-white text-[10px] font-black'>+ Goal</button><button id='gImpBtn' class='px-2 py-1 rounded-lg bg-sky-600 text-white text-[10px] font-black'>+ JSON</button>${!bossGoals.some(g => g.id === 'ASYLUM-980SQFT') ? `<button id='gSeedAsy' class='px-2 py-1 rounded-lg bg-amber-500 text-zinc-950 text-[10px] font-black'>+ Seed Asylum</button>` : ''}</div>` : `<button id='cSwitchId' class='px-2 py-1 rounded-lg bg-zinc-800 text-[10px] font-bold text-sky-300'>${myVault ? 'Switch ID / Add Code' : 'Enter Crew ID'}</button>`}</div>
         <div class='flex flex-wrap gap-1.5'>${nodeList.map(n => `<button data-pickg='${esc(n.id)}' class='px-2.5 py-1.5 rounded-xl border text-[11px] font-black truncate max-w-[200px] ${n.id === activeGoalId ? 'bg-sky-600/30 border-sky-400 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-300'}'>${esc(n.title)}</button>`).join('') || `<span class='text-[11px] text-zinc-500'>${bossUi ? 'Tap + Seed Asylum or + JSON to create your first Goal Bundle.' : 'Enter your personal Crew ID or a Goal Code below.'}</span>`}</div>
-        ${!bossUi && (!myVault || window.__hbShowCodeBox) ? `<div class='pt-2 border-t border-zinc-800 space-y-2'><div class='flex gap-2'><input id='cCodeIn' value='${esc(myCrewId)}' placeholder='Paste Crew ID (AVERY-...) or Goal Code' class='flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-mono uppercase text-white'><button id='cCodeGo' class='px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-black'>Load</button></div>${err ? `<div class='text-[11px] font-mono text-rose-400'>${esc(err)}</div>` : ''}</div>` : ''}
+        ${err ? `<div class='text-[11px] font-mono text-rose-400'>${esc(err)}</div>` : ''}
+        ${!bossUi && (!myVault || window.__hbShowCodeBox) ? `<div class='pt-2 border-t border-zinc-800 space-y-2'><div class='flex gap-2'><input id='cCodeIn' value='${esc(myCrewId)}' placeholder='Paste Crew ID (AVERY-...) or Goal Code' class='flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-mono uppercase text-white'><button id='cCodeGo' class='px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-black'>Load</button></div></div>` : ''}
       </div>
       ${goalBody || `<div class='p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center text-xs text-zinc-400'>${bossUi ? 'Select a Goal above or tap + Seed Asylum to get started.' : 'Blank canvas. Enter your Crew ID from Boss to load your assigned Goals, 3D Room Holograms, and private Estimated Cut.'}</div>`}
     </div>`;
 
     host.querySelectorAll('[data-pickg]').forEach(b => b.onclick = () => selectGoal(b.dataset.pickg));
-    if ($('gSeedAsy')) $('gSeedAsy').onclick = async () => { const a = makeAsylumStarter(); await setDoc(doc(db, 'hb_goals', a.id), a); selectGoal(a.id); };
+    if ($('gSeedAsy')) $('gSeedAsy').onclick = async () => { const a = makeAsylumStarter(); await safeWrite(() => fb.setDoc(fb.doc(db, 'hb_goals', a.id), a)); selectGoal(a.id); };
     if ($('gImpBtn')) $('gImpBtn').onclick = openImportJsonModal;
-    if ($('gNewBtn')) $('gNewBtn').onclick = async () => { const t = prompt('New Goal Title:'); if (!t) return; const id = genToken(t.split(' ')[0]); await setDoc(doc(db, 'hb_goals', id), { id, title: t.trim(), subtitle: 'Custom Goal Bundle', phases: [{ id: 'p1', code: 'PHASE 1', title: 'Setup & Prep', obj: '', steps: [] }], holos: [{ id: 'r1', name: 'Main Room', wFt: 20, lFt: 25, hFt: 10, scanUrl: '', scaleFtPerUnit: 10, pins: [] }], updatedAt: Date.now() }); selectGoal(id); };
+    if ($('gNewBtn')) $('gNewBtn').onclick = async () => { const t = prompt('New Goal Title:'); if (!t) return; const id = genToken(t.split(' ')[0]); await safeWrite(() => fb.setDoc(fb.doc(db, 'hb_goals', id), { id, title: t.trim(), subtitle: 'Custom Goal Bundle', phases: [{ id: 'p1', code: 'PHASE 1', title: 'Setup & Prep', obj: '', steps: [] }], holos: [{ id: 'r1', name: 'Main Room', wFt: 20, lFt: 25, hFt: 10, scanUrl: '', scaleFtPerUnit: 10, pins: [] }], updatedAt: Date.now() })); selectGoal(id); };
     if ($('cSwitchId')) $('cSwitchId').onclick = () => { window.__hbShowCodeBox = !window.__hbShowCodeBox; renderGoals(); };
     if ($('cCodeGo')) $('cCodeGo').onclick = async () => {
-      const raw = $('cCodeIn').value.trim().toUpperCase(); if (!raw) return;
-      const vSnap = await getDoc(doc(db, 'hb_crew_vault', raw));
-      if (vSnap.exists()) { window.__hbShowCodeBox = false; connectCrewVault(raw, false); return; }
-      const gSnap = await getDoc(doc(db, 'hb_goals', raw));
-      if (gSnap.exists()) { if (!guestCodes.includes(raw)) { guestCodes.unshift(raw); localStorage.setItem(GUEST_GOALS_KEY, JSON.stringify(guestCodes)); } window.__hbShowCodeBox = false; selectGoal(raw); return; }
-      renderGoals('No Crew ID or Goal Code matched: ' + raw);
+      const raw = $('cCodeIn').value.trim().toUpperCase(); if (!raw || !db) return;
+      try {
+        const vSnap = await fb.getDoc(fb.doc(db, 'hb_crew_vault', raw));
+        if (vSnap.exists()) { window.__hbShowCodeBox = false; connectCrewVault(raw, false); return; }
+        const gSnap = await fb.getDoc(fb.doc(db, 'hb_goals', raw));
+        if (gSnap.exists()) { if (!guestCodes.includes(raw)) { guestCodes.unshift(raw); localStorage.setItem(GUEST_GOALS_KEY, JSON.stringify(guestCodes)); } window.__hbShowCodeBox = false; selectGoal(raw); return; }
+        renderGoals('No Crew ID or Goal Code matched: ' + raw);
+      } catch (e) { renderGoals('Lookup error: ' + e.message); }
     };
     if ($('gOpenHolo')) $('gOpenHolo').onclick = () => setPrimaryTab('holo');
     if ($('gShareBtn')) $('gShareBtn').onclick = openShareGoalModal;
-    if ($('gTramexIn')) $('gTramexIn').onchange = async e => { await updateDoc(doc(db, 'hb_goals', activeGoal.id), { tramex: e.target.value.trim(), updatedAt: Date.now() }); };
+    if ($('gTramexIn')) $('gTramexIn').onchange = async e => { await safeWrite(() => fb.updateDoc(fb.doc(db, 'hb_goals', activeGoal.id), { tramex: e.target.value.trim(), updatedAt: Date.now() })); };
     if ($('gOvrGate')) $('gOvrGate').onclick = () => { overrideGate = true; renderGoals(); };
     host.querySelectorAll('.sf-b').forEach(b => b.onclick = () => { stepFilter = b.dataset.sf; renderGoals(); });
     host.querySelectorAll('[data-exp]').forEach(b => b.onclick = () => { const id = b.dataset.exp; if (expanded.has(id)) expanded.delete(id); else expanded.add(id); renderGoals(); });
@@ -353,12 +355,12 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       const st = phases[Number(pi)]?.steps?.find(x => x.id === sid); if (!st) return;
       const next = st.status === 'DONE' ? 'OPEN' : 'DONE';
       st.status = next; st.doneBy = next === 'DONE' ? actorName() : ''; st.doneAt = next === 'DONE' ? Date.now() : 0;
-      await updateDoc(doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() });
+      await safeWrite(() => fb.updateDoc(fb.doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() }));
     });
     host.querySelectorAll('[data-addst]').forEach(b => b.onclick = () => openStepModal(Number(b.dataset.addst), null));
     host.querySelectorAll('[data-edst]').forEach(b => b.onclick = () => { const [pi, sid] = b.dataset.edst.split('|'); const st = activeGoal.phases[Number(pi)]?.steps?.find(x => x.id === sid); if (st) openStepModal(Number(pi), st); });
-    if ($('gAddPhase')) $('gAddPhase').onclick = async () => { const t = prompt('New Phase Title:'); if (!t) return; const phases = [...(activeGoal.phases || []), { id: 'p_' + Date.now(), code: 'PHASE ' + ((activeGoal.phases?.length || 0) + 1), title: t.trim(), obj: '', steps: [] }]; await updateDoc(doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() }); };
-    if ($('gDelGoal')) $('gDelGoal').onclick = async () => { if (confirm('Delete Goal ' + activeGoal.title + '?')) { await deleteDoc(doc(db, 'hb_goals', activeGoal.id)); selectGoal(''); } };
+    if ($('gAddPhase')) $('gAddPhase').onclick = async () => { const t = prompt('New Phase Title:'); if (!t) return; const phases = [...(activeGoal.phases || []), { id: 'p_' + Date.now(), code: 'PHASE ' + ((activeGoal.phases?.length || 0) + 1), title: t.trim(), obj: '', steps: [] }]; await safeWrite(() => fb.updateDoc(fb.doc(db, 'hb_goals', activeGoal.id), { phases, updatedAt: Date.now() })); };
+    if ($('gDelGoal')) $('gDelGoal').onclick = async () => { if (confirm('Delete Goal ' + activeGoal.title + '?')) { await safeWrite(() => fb.deleteDoc(fb.doc(db, 'hb_goals', activeGoal.id))); selectGoal(''); } };
   }
 
   function renderBossCuts() {
@@ -399,27 +401,29 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       const name = prompt('Crew Member Name (e.g. Avery, Jon):'); if (!name) return;
       const role = prompt('Role (optional, e.g. Lead Installer):') || '';
       const cid = genToken(name);
-      await setDoc(doc(db, 'hb_crew_vault', cid), { crewId: cid, name: name.trim(), role: role.trim(), assignedGoals: [], updatedAt: Date.now() });
+      await safeWrite(() => fb.setDoc(fb.doc(db, 'hb_crew_vault', cid), { crewId: cid, name: name.trim(), role: role.trim(), assignedGoals: [], updatedAt: Date.now() }));
     };
     host.querySelectorAll('[data-cpcr]').forEach(b => b.onclick = () => { const u = `${location.origin}${location.pathname}?crew=${b.dataset.cpcr}`; navigator.clipboard?.writeText(u); alert(`Private Crew Link Copied!\nID: ${b.dataset.cpcr}\n${u}`); });
     host.querySelectorAll('[data-pvcr]').forEach(b => b.onclick = () => { connectCrewVault(b.dataset.pvcr, true); setPrimaryTab('goals'); });
-    host.querySelectorAll('[data-dlcr]').forEach(b => b.onclick = async () => { if (confirm('Revoke & delete Crew ID ' + b.dataset.dlcr + '?')) await deleteDoc(doc(db, 'hb_crew_vault', b.dataset.dlcr)); });
+    host.querySelectorAll('[data-dlcr]').forEach(b => b.onclick = async () => { if (confirm('Revoke & delete Crew ID ' + b.dataset.dlcr + '?')) await safeWrite(() => fb.deleteDoc(fb.doc(db, 'hb_crew_vault', b.dataset.dlcr))); });
     if ($('finGoalSel')) $('finGoalSel').onchange = e => { selectGoal(e.target.value); renderBossCuts(); };
     if ($('finPushBtn')) $('finPushBtn').onclick = async () => {
       const grossTake = Number($('finGross').value) || 0, overhead = Number($('finOver').value) || 0;
       const netPool = Math.max(0, grossTake - overhead), cuts = {};
-      for (const c of crewRoster) {
-        const assigned = !!host.querySelector(`[data-fa="${c.crewId}"]`)?.checked;
-        const pct = Number(host.querySelector(`[data-fp="${c.crewId}"]`)?.value) || 0;
-        const fixed = Number(host.querySelector(`[data-ff="${c.crewId}"]`)?.value) || 0;
-        const estCut = fixed > 0 ? fixed : Math.round(netPool * pct / 100);
-        cuts[c.crewId] = { assigned, pct, fixed, estCut };
-        let list = (c.assignedGoals || []).filter(g => g.goalId !== gId);
-        if (assigned) list.unshift({ goalId: gId, title: gObj.title, estCut, pct: fixed > 0 ? 0 : pct });
-        await setDoc(doc(db, 'hb_crew_vault', c.crewId), { ...c, assignedGoals: list, updatedAt: Date.now() });
-      }
-      await setDoc(doc(db, 'hb_boss_finances', gId), { grossTake, overhead, cuts, updatedAt: Date.now() });
-      alert('Saved Boss financials & pushed private estimated cuts to assigned Crew IDs!');
+      await safeWrite(async () => {
+        for (const c of crewRoster) {
+          const assigned = !!host.querySelector(`[data-fa="${c.crewId}"]`)?.checked;
+          const pct = Number(host.querySelector(`[data-fp="${c.crewId}"]`)?.value) || 0;
+          const fixed = Number(host.querySelector(`[data-ff="${c.crewId}"]`)?.value) || 0;
+          const estCut = fixed > 0 ? fixed : Math.round(netPool * pct / 100);
+          cuts[c.crewId] = { assigned, pct, fixed, estCut };
+          let list = (c.assignedGoals || []).filter(g => g.goalId !== gId);
+          if (assigned) list.unshift({ goalId: gId, title: gObj.title, estCut, pct: fixed > 0 ? 0 : pct });
+          await fb.setDoc(fb.doc(db, 'hb_crew_vault', c.crewId), { ...c, assignedGoals: list, updatedAt: Date.now() });
+        }
+        await fb.setDoc(fb.doc(db, 'hb_boss_finances', gId), { grossTake, overhead, cuts, updatedAt: Date.now() });
+        alert('Saved Boss financials & pushed private estimated cuts to assigned Crew IDs!');
+      });
     };
   }
 
@@ -429,29 +433,44 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     $('mainTabs').addEventListener('click', e => {
       const b = e.target.closest('.tab-btn'); if (!b || !inBossUi()) return;
       const k = b.dataset.tab;
+      document.querySelectorAll('#hbPrimaryNav .ptab-btn').forEach(x => x.className = 'ptab-btn px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-bold shrink-0');
       document.querySelectorAll('main > section').forEach(s => s.classList.toggle('hidden', s.id !== 'view-' + k));
       if (k === 'board') window.HeistBoard?.renderAll?.();
     });
   }
 
   wireNav();
-  const params = new URLSearchParams(location.search);
-  const urlCrew = params.get('crew'), urlGoal = params.get('goal') || params.get('code');
-  onAuthStateChanged(auth, u => {
-    user = u; isBoss = !!(u?.email && u.email.toLowerCase() === BOSS);
-    updateChrome();
-    if (isBoss) {
-      previewCrewId = ''; startBossStreams(); setPrimaryTab('goals');
-    } else {
-      bossUnsubs.forEach(fn => { try { fn(); } catch {} }); bossUnsubs = [];
-      if (urlCrew) connectCrewVault(urlCrew, false);
-      else if (myCrewId) connectCrewVault(myCrewId, false);
-      if (urlGoal) {
-        const g = urlGoal.trim().toUpperCase();
-        if (!guestCodes.includes(g)) { guestCodes.unshift(g); localStorage.setItem(GUEST_GOALS_KEY, JSON.stringify(guestCodes)); }
-        selectGoal(g);
+  renderGoals();
+
+  try {
+    const [appM, authM, fsM] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'),
+      import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+    ]);
+    fb = { ...appM, ...authM, ...fsM };
+    const app = fb.getApps().length ? fb.getApps()[0] : fb.initializeApp(CFG);
+    auth = fb.getAuth(app); db = fb.getFirestore(app);
+    const params = new URLSearchParams(location.search);
+    const urlCrew = params.get('crew'), urlGoal = params.get('goal') || params.get('code');
+    fb.onAuthStateChanged(auth, u => {
+      user = u; isBoss = !!(u?.email && u.email.toLowerCase() === BOSS);
+      updateChrome();
+      if (isBoss) {
+        previewCrewId = ''; startBossStreams(); setPrimaryTab('goals');
+      } else {
+        bossUnsubs.forEach(fn => { try { fn(); } catch {} }); bossUnsubs = [];
+        if (urlCrew) connectCrewVault(urlCrew, false);
+        else if (myCrewId) connectCrewVault(myCrewId, false);
+        if (urlGoal) {
+          const g = urlGoal.trim().toUpperCase();
+          if (!guestCodes.includes(g)) { guestCodes.unshift(g); localStorage.setItem(GUEST_GOALS_KEY, JSON.stringify(guestCodes)); }
+          selectGoal(g);
+        }
+        setPrimaryTab('goals');
       }
-      setPrimaryTab('goals');
-    }
-  });
+    });
+  } catch (e) {
+    renderGoals('Firebase init error: ' + e.message);
+  }
 })();
