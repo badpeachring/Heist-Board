@@ -21,11 +21,14 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
   function applyRoleLayout() {
     const crew = inCrewView();
     ['heistSelect', 'newHeistBtn', 'themeCycleBtn'].forEach(id => $(id)?.classList.toggle('hidden', crew));
-
-    if (crew) {
-      const curCad = !$('view-cad')?.classList.contains('hidden');
-      if (!curCad || !activeMission?.holo) window.HeistBoard?.switchTab?.('cloud');
-    }
+    document.querySelectorAll('#mainTabs .tab-btn').forEach(b => {
+      const k = b.dataset.tab;
+      b.classList.toggle('hidden', crew && k !== 'cloud');
+    });
+    document.querySelectorAll('main > section').forEach(s => {
+      if (crew && s.id !== 'view-cloud') s.classList.add('hidden');
+    });
+    if (crew) window.HeistBoard?.switchTab?.('cloud');
     updateHeaderBtn();
   }
 
@@ -170,13 +173,11 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
         ${activeMission ? `<div class='bg-zinc-900/95 border border-emerald-500/40 rounded-2xl p-3 space-y-2.5'>
           <div class='flex items-center justify-between gap-2'>
             <div><div class='text-[10px] font-mono text-emerald-400'>ACTIVE MISSION • ${esc(activeMission.code)}</div><div class='text-base font-black text-white'>${esc(activeMission.title)}</div></div>
-            ${activeMission.holo ? `<button id='crOpenHolo' class='px-3 py-1.5 rounded-xl bg-cyan-600 text-white text-[11px] font-black shrink-0'>Open 3D Room</button>` : ''}
           </div>
           <div class='space-y-2'>${(activeMission.cards || []).map(c => `<div data-crst='${c.id}' class='p-2.5 rounded-xl border cursor-pointer ${c.status === 'DONE' ? 'bg-emerald-950/35 border-emerald-500/45' : 'bg-zinc-950 border-zinc-800'}'><div class='flex items-center justify-between gap-2'><span class='text-xs font-black ${c.status === 'DONE' ? 'line-through text-emerald-300' : 'text-white'}'>${esc(c.title)}</span><span class='text-[10px] font-mono ${c.status === 'DONE' ? 'text-emerald-400' : 'text-amber-300'}'>${c.status}</span></div>${c.notes ? `<div class='text-[11px] text-zinc-300 mt-1'>${esc(c.notes)}</div>` : ''}</div>`).join('')}</div>
         </div>` : `<div class='p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center text-xs text-zinc-400'>Blank slate. Paste a Mission Code above (or open a Boss link) to load your assigned work.</div>`}
       </div>`;
       $('crJoinBtn').onclick = () => loadMissionByCode($('crCodeIn').value);
-      if ($('crOpenHolo')) $('crOpenHolo').onclick = () => window.HeistBoard?.switchTab?.('cad');
       host.querySelectorAll('[data-crst]').forEach(el => el.onclick = async () => {
         const cid = el.dataset.crst;
         const cards = (activeMission.cards || []).map(c => c.id === cid ? { ...c, status: c.status === 'DONE' ? 'OPEN' : 'DONE' } : c);
@@ -224,6 +225,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
     btn.textContent = 'Crew Codes'; nav.appendChild(btn);
     const sec = document.createElement('section'); sec.id = 'view-cloud'; sec.className = 'hidden p-3 overflow-y-auto flex-1'; main.appendChild(sec);
     nav.addEventListener('click', e => { if (e.target.closest('.tab-btn')?.dataset.tab === 'cloud') renderView(); });
+    setInterval(() => { if (inCrewView()) applyRoleLayout(); }, 1500);
 
     window.HeistBoard = window.HeistBoard || {};
     window.HeistBoard.isCrewMode = inCrewView;
