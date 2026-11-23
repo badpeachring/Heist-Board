@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>Heist Board</title>
-  <link rel="manifest" href="manifest.json?v=1">
+  <link rel="manifest" href="manifest.json?v=5">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body{background:#09090b;color:#f4f4f5;font-family:system-ui,-apple-system,sans-serif;overscroll-behavior:none;}
@@ -13,27 +13,46 @@
     .theme-blueprint{background-color:#0c2340;background-image:linear-gradient(rgba(56,189,248,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.12) 1px,transparent 1px);background-size:24px 24px;}
     .pin-dot{width:12px;height:12px;border-radius:9999px;background:#ef4444;border:2px solid #fecaca;box-shadow:0 2px 6px rgba(0,0,0,.7);}
   </style>
-  <link rel="icon" type="image/png" href="./icon.png?v=3">
-  <link rel="apple-touch-icon" href="./icon.png?v=3">
+  <link rel="icon" type="image/jpeg" href="./1000005068.jpg">
+  <link rel="apple-touch-icon" href="./1000005068.jpg">
 </head>
 <body class="h-[100dvh] flex flex-col overflow-hidden">
   <header class="bg-zinc-950/95 border-b border-zinc-800 px-3 py-2 flex items-center justify-between gap-2 shrink-0 z-30">
-    <div class="flex items-center gap-2 min-w-0 flex-1">
+    <div class="flex items-center gap-2 min-w-0">
       <span class="text-xs font-black tracking-widest text-rose-500 shrink-0">HEIST</span>
-      <select id="heistSelect" class="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs font-bold text-white truncate flex-1"></select>
+      <span id="hbRoleBadge" class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-[10px] font-mono font-bold text-zinc-300 truncate">CREW</span>
     </div>
     <div id="headerActionSlots" class="flex items-center gap-1.5 shrink-0">
-      <button id="newHeistBtn" class="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-black">+ Heist</button>
-      <button id="themeCycleBtn" class="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-[11px] font-bold text-zinc-200">Theme</button>
+      <button id="hbToolsToggle" class="hidden px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] font-bold text-zinc-300">Tools ▾</button>
+      <button id="hbAuthBtn" class="px-2.5 py-1 rounded-lg bg-zinc-900 border border-sky-500/50 text-[11px] font-black text-sky-300">Boss Login</button>
     </div>
   </header>
-  <nav id="mainTabs" class="bg-zinc-950 border-b border-zinc-800 px-2.5 py-2 flex flex-wrap items-center gap-1.5 shrink-0">
-    <button data-tab="board" class="tab-btn px-2.5 py-1 rounded-lg bg-rose-500/25 border border-rose-400 text-white text-xs font-black shrink-0">Board</button>
-    <button data-tab="setups" class="tab-btn px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0">Setups</button>
-    <button data-tab="crew" class="tab-btn px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0">Crew &amp; Cuts</button>
+
+  <nav id="hbPrimaryNav" class="bg-zinc-950 border-b border-zinc-800 px-2.5 py-2 flex items-center gap-1.5 overflow-x-auto shrink-0">
+    <button data-ptab="goals" class="ptab-btn px-3 py-1.5 rounded-xl bg-rose-600/25 border border-rose-400 text-white text-xs font-black shrink-0">Goals</button>
+    <button data-ptab="holo" class="ptab-btn px-3 py-1.5 rounded-xl bg-zinc-900 border border-cyan-500/40 text-cyan-300 text-xs font-bold shrink-0">Room Holo</button>
+    <button data-ptab="cuts" class="ptab-btn hidden px-3 py-1.5 rounded-xl bg-zinc-900 border border-emerald-500/40 text-emerald-300 text-xs font-bold shrink-0">Crew &amp; Cuts</button>
   </nav>
+
+  <div id="hbLegacyBar" class="hidden bg-zinc-900/95 border-b border-amber-500/40 px-2.5 py-2 space-y-2 shrink-0">
+    <div class="flex items-center gap-1.5">
+      <select id="heistSelect" class="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs font-bold text-white truncate flex-1"></select>
+      <button id="newHeistBtn" class="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-black shrink-0">+ Board</button>
+      <button id="themeCycleBtn" class="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-[11px] font-bold text-zinc-200 shrink-0">Theme</button>
+    </div>
+    <nav id="mainTabs" class="flex flex-wrap items-center gap-1.5">
+      <button data-tab="board" class="tab-btn px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] font-bold shrink-0">Board</button>
+      <button data-tab="setups" class="tab-btn px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] font-bold shrink-0">Setups</button>
+      <button data-tab="crew" class="tab-btn px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] font-bold shrink-0">Local Budget</button>
+    </nav>
+  </div>
+
   <main class="flex-1 relative flex flex-col overflow-hidden min-h-0">
-    <section id="view-board" class="flex-1 relative theme-tactical overflow-hidden min-h-0">
+    <section id="view-goals" class="p-3 overflow-y-auto flex-1"></section>
+    <section id="view-holo" class="hidden p-3 overflow-y-auto flex-1"></section>
+    <section id="view-cuts" class="hidden p-3 overflow-y-auto flex-1"></section>
+
+    <section id="view-board" class="hidden flex-1 relative theme-tactical overflow-hidden min-h-0">
       <svg id="stringLayer" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
       <div id="cardsLayer" class="absolute inset-0 z-20"></div>
       <div class="absolute bottom-4 right-4 z-30 flex gap-2">
@@ -44,7 +63,7 @@
     <section id="view-setups" class="hidden p-3 space-y-2 overflow-y-auto flex-1"></section>
     <section id="view-crew" class="hidden p-3 space-y-3 overflow-y-auto flex-1">
       <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 space-y-2">
-        <div class="text-xs font-black uppercase tracking-wider text-amber-400">Heist Budget &amp; Take</div>
+        <div class="text-xs font-black uppercase tracking-wider text-amber-400">Local Board Budget</div>
         <div class="grid grid-cols-2 gap-2">
           <label class="text-[11px] text-zinc-400">Gross Take ($)<input id="grossTakeInput" type="number" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white font-mono"></label>
           <label class="text-[11px] text-zinc-400">Materials / Overhead ($)<input id="overheadInput" type="number" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-white font-mono"></label>
@@ -53,13 +72,14 @@
       </div>
       <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 space-y-2">
         <div class="flex justify-between items-center">
-          <span class="text-xs font-black uppercase tracking-wider text-sky-400">Crew &amp; 1099 Cuts</span>
+          <span class="text-xs font-black uppercase tracking-wider text-sky-400">Local Crew List</span>
           <button id="addCrewBtn" class="px-2.5 py-1 rounded-lg bg-sky-600 text-white text-[11px] font-bold">+ Member</button>
         </div>
         <div id="crewList" class="space-y-2"></div>
       </div>
     </section>
   </main>
+
   <div id="cardModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
     <div class="w-full max-w-md bg-zinc-950 border border-zinc-700 rounded-2xl p-4 space-y-2.5">
       <div class="flex justify-between items-center">
@@ -80,13 +100,13 @@
       </div>
     </div>
   </div>
+
   <script src="./board-engine.js?v=1"></script>
   <script src="./lay-a-weigh-ops.js?v=1"></script>
   <script src="./google-bridge.js?v=1"></script>
-  <script src="./asylum-ops.js?v=5"></script>
-  <script src="./cad-construct.js?v=5"></script>
-  <script src="./firebase-config.js?v=2"></script>
-  <script type="module" src="./firebase-cloud.js?v=2"></script>
-  <script>if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=1');</script>
+  <script src="./firebase-config.js?v=3"></script>
+  <script src="./holo-engine.js?v=2"></script>
+  <script src="./goal-engine.js?v=2"></script>
+  <script>if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js?v=2');</script>
 </body>
 </html>
