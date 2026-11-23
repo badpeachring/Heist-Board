@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const SCRATCH_KEY = 'hb_cad_scratch_v1';
 
-  let THREE = null, renderer = null, scene = null, camera = null, rootGrp = null, animId = null;
+  let THREE = null, renderer = null, scene = null, camera = null, rootGrp = null;
   let mode = 'asylum', glMode = false, spinning = true, explode = 0.25;
   let theta = 0.72, phi = 0.95, radius = 9.2, targetY = 0.6;
   let selectables = [], selectedMesh = null, spinNodes = [];
@@ -51,9 +51,7 @@
   }
 
   function makeMat(hex, opts = {}) {
-    if (glMode) {
-      return new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.65, wireframe: true, transparent: true, opacity: 0.92 });
-    }
+    if (glMode) return new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.65, wireframe: true, transparent: true, opacity: 0.92 });
     return new THREE.MeshStandardMaterial({ color: hex, roughness: opts.rough ?? 0.55, metalness: opts.metal ?? 0.25, transparent: !!opts.op, opacity: opts.op ?? 1, map: opts.map || null });
   }
 
@@ -61,18 +59,14 @@
     const m = new THREE.Mesh(geo, mat);
     m.position.set(pos[0], pos[1], pos[2]);
     m.userData = { ...meta, baseY: pos[1], exp: meta.exp || 0 };
-    rootGrp.add(m);
-    selectables.push(m);
-    return m;
+    rootGrp.add(m); selectables.push(m); return m;
   }
 
   function clearRoot() {
     if (!rootGrp) return;
     while (rootGrp.children.length) {
       const c = rootGrp.children[0];
-      c.geometry?.dispose?.();
-      c.material?.dispose?.();
-      rootGrp.remove(c);
+      c.geometry?.dispose?.(); c.material?.dispose?.(); rootGrp.remove(c);
     }
     selectables = []; spinNodes = []; selectedMesh = null;
   }
@@ -84,7 +78,11 @@
     const screedMat = makeMat(0xd97706, { rough: 0.8 });
     addPart(new THREE.BoxGeometry(W - 0.08, 0.16, 0.12), screedMat, [0, 0.15, -L / 2 + 0.08], { name: 'Permanent Wood Screed Rails (2x4 Ripped)', cat: 'Phase 1', dims: '3/4" x 1-1/2" or 3/4" x 1"', spec: '2-1/2" Grip-Rite masonry nails into mortar joints every 18-24". Left in place for encapsulation.', exp: 0.55 });
     addPart(new THREE.BoxGeometry(W - 0.08, 0.16, 0.12), screedMat, [0, 0.15, L / 2 - 0.08], { name: 'Permanent Wood Screed Rails (South)', cat: 'Phase 1', dims: 'Flush to laser chalk line', spec: 'Packed with wet VersaBond where mortar joints miss.', exp: 0.55 });
-
+    addPart(new THREE.BoxGeometry(W, 0.12, L), makeMat(0x9ca3af, { rough: 0.85, op: 0.88 }), [0, 0.28, 0], { name: 'VersaBond Slurry + Quikrete #100450 Patch', cat: 'Phase 2', dims: '70-90 bags • 65-102 gal total water', spec: 'Wet-on-wet within 15-20 min; FANS OFF during pour, then SETUP FANS 48-72 hrs until Tramex <= 4.5%.', exp: 1.15 });
+    addPart(new THREE.BoxGeometry(W, 0.06, L), makeMat(0x0284c7, { rough: 0.35, metal: 0.15, op: 0.82 }), [0, 0.42, 0], { name: 'Tufflex VRP-111 Moisture-Mitigation Epoxy Primer', cat: 'Phase 4.3 (NO DRYLOK)', dims: 'Direct on bare dry concrete + wood screed strips', spec: 'GATE: Tramex <= 4.5% & full 3,055 sq ft ground/HEPA-vacced. Apply within recoat window.', exp: 1.75 });
+    addPart(new THREE.BoxGeometry(W, 0.10, L), makeMat(0x18181b, { rough: 0.35, metal: 0.15 }), [0, 0.56, 0], { name: 'ELASTA-TUFF 5000 / 1/4" Liquid Rubber + Black Topcoat', cat: 'Phase 4.4', dims: '9 ft (3 walls) / 11 ft (entry) = 1,750 sq ft', spec: 'ELASTA-TUFF 5000 / SYD-BASECOAT + 1/4" liquid rubber (or 3/8" granule slurry) + solid black aliphatic topcoat.', exp: 2.35 });
+    addPart(new THREE.BoxGeometry(2.9, 0.08, 4.5), makeMat(0xffffff, { rough: 0.3, map: glMode ? null : makeCheckerTex() }), [0, 0.72, 0.1], { name: 'Centered 4\'x4\' Black & White Checkerboard', cat: 'Phase 4.5', dims: '29 ft x 45 ft (1,305 sq ft)', spec: '2 coats white (indirect fans) + burnished ScotchBlue 4\'x4\' tape + 2 coats black (pull tape wet).', exp: 3.05 });
+    addPart(new THREE.BoxGeometry(W, 0.04, L), makeMat(0x38bdf8, { rough: 0.1, metal: 0.2, op: 0.28 }), [0, 0.86, 0], { name: 'Clear Aliphatic Polyurethane/Polyaspartic Wear Coat', cat: 'Phase 4.6 Final', dims: '3,055 sq ft unified sheen', spec: 'Indirect airflow cure gate: 24 hrs min light foot traffic, 48-72 hrs heavy event furniture/staging load-in.', exp: 3.65 });
   }
 
   function buildWatch() {
@@ -109,7 +107,7 @@
       else if (p.type === 'cyl') geo = new THREE.CylinderGeometry(Number(p.w) / 2, Number(p.w) / 2, Number(p.h), 32);
       else if (p.type === 'ring') { geo = new THREE.TorusGeometry(Number(p.w) / 2, Math.max(0.05, Number(p.h) / 3), 12, 32); geo.rotateX(Math.PI / 2); }
       else geo = new THREE.BoxGeometry(Number(p.w) || 2, Number(p.h) || 0.2, Number(p.d) || 2);
-      const m = addPart(geo, makeMat(p.color || '#10b981'), [0, Number(p.y) || 0, 0], { name: p.name, cat: `Custom ${p.type.toUpperCase()}`, dims: `W:${p.w} H:${p.h} D:${p.d}${p.type === 'gear' ? ' • ' + p.teeth + 'T' : ''}`, spec: p.note || 'Custom scratch construct part.', exp: idx * 0.7, scratchId: p.id });
+      const m = addPart(geo, makeMat(p.color || '#10b981'), [0, Number(p.y) || 0, 0], { name: p.name, cat: `Custom ${p.type.toUpperCase()}`, dims: `W:${p.w} H:${p.h} D:${p.d}${p.type === 'gear' ? ' • ' + p.teeth + 'T' : ''}`, spec: p.note || 'Custom scratch construct part.', exp: idx * 0.7 });
       if (p.type === 'gear') spinNodes.push({ m, s: idx % 2 === 0 ? 0.55 : -0.55 });
     });
   }
@@ -117,17 +115,11 @@
   function rebuildScene() {
     if (!THREE || !rootGrp) return;
     clearRoot();
-    if (mode === 'asylum') buildAsylum();
-    else if (mode === 'watch') buildWatch();
-    else buildScratch();
-    applyExplode();
-    updateInspector(null);
-    renderScratchList();
+    if (mode === 'asylum') buildAsylum(); else if (mode === 'watch') buildWatch(); else buildScratch();
+    applyExplode(); updateInspector(null); renderScratchList();
   }
 
-  function applyExplode() {
-    selectables.forEach(m => { m.position.y = m.userData.baseY + explode * (m.userData.exp || 0); });
-  }
+  function applyExplode() { selectables.forEach(m => { m.position.y = m.userData.baseY + explode * (m.userData.exp || 0); }); }
 
   function updateCamera() {
     if (!camera) return;
@@ -136,37 +128,27 @@
   }
 
   function updateInspector(mesh) {
-    const box = $('cadInspector');
-    if (!box) return;
-    if (!mesh) {
-      box.innerHTML = `<div class='text-xs font-bold text-emerald-300'>Tap any 3D layer or gear to inspect it</div><div class='text-[10px] text-zinc-400 mt-0.5'>Drag with 1 finger to orbit • Pinch or slide Zoom • Drag Explode to scroll material planes</div>`;
-      return;
-    }
+    const box = $('cadInspector'); if (!box) return;
+    if (!mesh) { box.innerHTML = `<div class='text-xs font-bold text-emerald-300'>Tap any 3D layer or gear to inspect it</div><div class='text-[10px] text-zinc-400 mt-0.5'>Drag with 1 finger to orbit • Pinch or slide Zoom • Drag Explode to scroll material planes</div>`; return; }
     const u = mesh.userData;
     box.innerHTML = `<div class='flex items-center justify-between gap-2'><span class='text-xs font-black text-white'>${u.name}</span><span class='px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-[9px] font-mono text-emerald-300 shrink-0'>${u.cat}</span></div><div class='text-[10px] font-mono text-cyan-300 mt-1'>${u.dims}</div><div class='text-[11px] text-zinc-300 mt-1'>${u.spec}</div>`;
   }
 
   function renderScratchList() {
-    const wrap = $('cadScratchPanel');
-    if (!wrap) return;
-    wrap.classList.toggle('hidden', mode !== 'scratch');
-    if (mode !== 'scratch') return;
+    const wrap = $('cadScratchPanel'); if (!wrap) return;
+    wrap.classList.toggle('hidden', mode !== 'scratch'); if (mode !== 'scratch') return;
     $('cadScratchItems').innerHTML = scratchParts.map((p, i) => `<div class='flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-950 border border-zinc-800'><div class='min-w-0'><div class='text-xs font-bold text-white truncate'>${p.name} <span class='text-[10px] text-emerald-400'>(${p.type})</span></div><div class='text-[10px] font-mono text-zinc-400'>Y:${p.y} • W:${p.w} H:${p.h}</div></div><button data-rmp='${i}' class='px-2 py-1 rounded bg-rose-950 text-rose-300 text-[10px] font-bold shrink-0'>Del</button></div>`).join('');
     $('cadScratchItems').querySelectorAll('[data-rmp]').forEach(b => b.onclick = () => { scratchParts.splice(Number(b.dataset.rmp), 1); saveScratch(); rebuildScene(); });
   }
 
   async function bootThree() {
-    const cv = $('cadCanvas');
-    if (!cv) return;
-    if (!THREE) {
-      $('cadStatus').textContent = 'Loading Three.js WebGL CAD Engine...';
-      THREE = await import('https://esm.sh/three@0.160.0');
-    }
+    const cv = $('cadCanvas'); if (!cv) return;
+    if (!THREE) { $('cadStatus').textContent = 'Loading Three.js WebGL CAD...'; THREE = await import('https://esm.sh/three@0.160.0'); }
     if (!renderer) {
-      renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: false });
+      renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       scene = new THREE.Scene(); scene.background = new THREE.Color(0x05080f);
-      camera = new THREE.PerspectiveCamera(45, cv.clientWidth / 340, 0.1, 100);
+      camera = new THREE.PerspectiveCamera(45, (cv.clientWidth || 340) / 340, 0.1, 100);
       scene.add(new THREE.AmbientLight(0xffffff, 0.65));
       const dl = new THREE.DirectionalLight(0xffffff, 1.1); dl.position.set(6, 12, 8); scene.add(dl);
       const pl = new THREE.PointLight(0x10b981, 0.9, 25); pl.position.set(-5, 6, -5); scene.add(pl);
@@ -177,11 +159,8 @@
       onRes(); window.addEventListener('resize', onRes);
       let t = 0;
       const loop = () => {
-        animId = requestAnimationFrame(loop);
-        if (spinning) {
-          t += 0.03;
-          spinNodes.forEach(n => { if (n.osc) n.m.rotation.z = Math.sin(t * 2.2) * 0.9; else n.m.rotation.y += n.s * 0.025; });
-        }
+        requestAnimationFrame(loop);
+        if (spinning) { t += 0.03; spinNodes.forEach(n => { if (n.osc) n.m.rotation.z = Math.sin(t * 2.2) * 0.9; else n.m.rotation.y += n.s * 0.025; }); }
         updateCamera(); renderer.render(scene, camera);
       };
       loop();
@@ -191,24 +170,13 @@
   }
 
   function bindCanvasPointer(cv) {
-    const ptrs = new Map();
-    let downPos = null, moved = false, lastDist = 0;
+    const ptrs = new Map(); let downPos = null, moved = false, lastDist = 0;
     cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); downPos = { x: e.clientX, y: e.clientY }; moved = false; lastDist = 0; };
     cv.onpointermove = e => {
       if (!ptrs.has(e.pointerId)) return;
-      const prev = ptrs.get(e.pointerId);
-      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (ptrs.size === 1) {
-        const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
-        if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 6) moved = true;
-        theta -= dx * 0.01; phi = Math.max(0.18, Math.min(1.48, phi - dy * 0.01));
-      } else if (ptrs.size === 2) {
-        moved = true;
-        const [a, b] = [...ptrs.values()];
-        const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        if (lastDist) radius = Math.max(2.5, Math.min(18, radius - (dist - lastDist) * 0.025));
-        lastDist = dist;
-      }
+      const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) { const dx = e.clientX - prev.x, dy = e.clientY - prev.y; if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 6) moved = true; theta -= dx * 0.01; phi = Math.max(0.18, Math.min(1.48, phi - dy * 0.01)); }
+      else if (ptrs.size === 2) { moved = true; const [a, b] = [...ptrs.values()]; const dist = Math.hypot(a.x - b.x, a.y - b.y); if (lastDist) radius = Math.max(2.5, Math.min(18, radius - (dist - lastDist) * 0.025)); lastDist = dist; }
     };
     const up = e => {
       if (cv.hasPointerCapture(e.pointerId)) cv.releasePointerCapture(e.pointerId);
@@ -219,25 +187,17 @@
         const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, camera);
         const hits = ray.intersectObjects(selectables, false);
         selectables.forEach(m => { if (!glMode && m.material?.emissive) m.material.emissive.setHex(0x000000); });
-        if (hits.length) {
-          selectedMesh = hits[0].object;
-          if (!glMode && selectedMesh.material?.emissive) selectedMesh.material.emissive.setHex(0x10b981);
-          updateInspector(selectedMesh);
-        }
+        if (hits.length) { selectedMesh = hits[0].object; if (!glMode && selectedMesh.material?.emissive) selectedMesh.material.emissive.setHex(0x10b981); updateInspector(selectedMesh); }
       }
     };
     cv.onpointerup = up; cv.onpointercancel = up;
   }
 
   function renderShell() {
-    const host = $('view-cad');
-    if (!host || $('cadCanvas')) return;
+    const host = $('view-cad'); if (!host || $('cadCanvas')) return;
     host.innerHTML = `<div class='max-w-xl mx-auto space-y-2.5 pb-10'>
       <div class='bg-zinc-900/95 border border-emerald-500/45 rounded-2xl p-3 space-y-2'>
-        <div class='flex items-center justify-between gap-2'>
-          <div><div class='text-[10px] font-mono uppercase text-emerald-400'>3D Construct Engine</div><div class='text-sm font-black text-white'>CAD MATERIAL PLANE &amp; MICRO-GEARS</div></div>
-          <span id='cadStatus' class='text-[10px] font-mono text-zinc-400'>Ready</span>
-        </div>
+        <div class='flex items-center justify-between gap-2'><div><div class='text-[10px] font-mono uppercase text-emerald-400'>3D Construct Engine</div><div class='text-sm font-black text-white'>CAD MATERIAL PLANE &amp; MICRO-GEARS</div></div><span id='cadStatus' class='text-[10px] font-mono text-zinc-400'>Ready</span></div>
         <div class='grid grid-cols-3 gap-1.5'>
           <button data-cm='asylum' class='cad-m py-1.5 rounded-lg bg-emerald-600/30 border border-emerald-400 text-[11px] font-black text-white'>Asylum 47x65</button>
           <button data-cm='watch' class='cad-m py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] font-bold text-zinc-300'>Watch Gears</button>
@@ -254,25 +214,23 @@
         </div>
         <div id='cadInspector' class='p-2.5 rounded-xl bg-zinc-950 border border-zinc-800'></div>
       </div>
-
       <div id='cadScratchPanel' class='hidden bg-zinc-900/95 border border-amber-500/40 rounded-2xl p-3 space-y-2'>
-        <div class='text-xs font-black text-amber-300'>Build From Scratch — Add 3D Component</div>
+        <div class='text-xs font-black text-amber-300'>Build From Scratch - Add 3D Component</div>
         <div class='grid grid-cols-2 gap-1.5'>
           <input id='spName' placeholder='Part name (e.g. Pinion 12T)' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white'>
           <select id='spType' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white'><option value='gear'>Toothed Gear</option><option value='slab'>Slab / Plane</option><option value='cyl'>Cylinder / Shaft</option><option value='ring'>Ring / Bearing</option></select>
         </div>
         <div class='grid grid-cols-4 gap-1.5'>
-          <input id='spW' type='number' step='0.2' value='1.6' placeholder='W/Dia' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
-          <input id='spH' type='number' step='0.1' value='0.25' placeholder='Height' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
-          <input id='spY' type='number' step='0.2' value='0.9' placeholder='Layer Y' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
-          <input id='spT' type='number' value='20' placeholder='Teeth' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
+          <input id='spW' type='number' step='0.2' value='1.6' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
+          <input id='spH' type='number' step='0.1' value='0.25' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
+          <input id='spY' type='number' step='0.2' value='0.9' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
+          <input id='spT' type='number' value='20' class='bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white'>
         </div>
-        <input id='spNote' placeholder='Component material / function note...' class='w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white'>
+        <input id='spNote' placeholder='Material / function note...' class='w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white'>
         <button id='spAddBtn' class='w-full py-2 rounded-xl bg-emerald-600 text-white text-xs font-black'>+ Spawn Component Into Construct</button>
         <div id='cadScratchItems' class='space-y-1.5'></div>
       </div>
     </div>`;
-
     host.querySelectorAll('.cad-m').forEach(b => b.onclick = () => {
       mode = b.dataset.cm;
       host.querySelectorAll('.cad-m').forEach(x => x.className = x === b ? 'cad-m py-1.5 rounded-lg bg-emerald-600/30 border border-emerald-400 text-[11px] font-black text-white' : 'cad-m py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] font-bold text-zinc-300');
@@ -295,7 +253,7 @@
     if (!nav || !main || $('view-cad')) return;
     const btn = document.createElement('button');
     btn.dataset.tab = 'cad';
-    btn.className = 'tab-btn px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0';
+    btn.className = 'tab-btn px-2.5 py-1 rounded-lg bg-zinc-900 border border-emerald-500/50 text-emerald-300 text-xs font-bold shrink-0';
     btn.textContent = '3D CAD';
     nav.appendChild(btn);
     const sec = document.createElement('section');
