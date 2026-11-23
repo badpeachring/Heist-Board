@@ -7,6 +7,7 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
   window.__hbBossCrewLoaded = true;
   const $ = id => document.getElementById(id);
   const CREW_CODE_KEY = 'hb_active_crew_code_v1';
+  const CREW_NODES_KEY = 'hb_saved_crew_nodes_v1';
   const CREW_MODE_KEY = 'hb_crew_mode_v1';
   const BOSS = (window.HEIST_BOSS_EMAIL || 'sethmcnab13@gmail.com').toLowerCase();
   const CFG = window.HEIST_FIREBASE_CONFIG || {};
@@ -15,8 +16,21 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
 
   let auth = null, db = null, user = null, isBoss = false, crewFilter = 'ALL';
   let previewCrew = localStorage.getItem(CREW_MODE_KEY) === '1';
-  let bossHeists = [], bossCodes = [], activeMission = null, activeCode = localStorage.getItem(CREW_CODE_KEY) || '';
+  let bossHeists = [], bossCodes = [], activeMission = null;
+  let activeCode = localStorage.getItem(CREW_CODE_KEY) || '';
+  let savedNodes = (() => { try { const a = JSON.parse(localStorage.getItem(CREW_NODES_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } })();
+  let expandedIds = new Set();
   let unsubs = [], crewUnsub = null;
+
+  const saveNodes = () => localStorage.setItem(CREW_NODES_KEY, JSON.stringify(savedNodes.slice(0, 20)));
+  function recordNode(code, title) {
+    if (!code) return;
+    const clean = code.trim().toUpperCase();
+    const existing = savedNodes.find(n => n.code === clean);
+    if (existing) { if (title) existing.title = title; }
+    else savedNodes.unshift({ code: clean, title: title || clean });
+    saveNodes();
+  }
 
   const hasUrlCode = () => new URLSearchParams(location.search).has('code');
   const inCrewView = () => previewCrew || hasUrlCode() || (HAS_KEY && !isBoss);
@@ -139,9 +153,11 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       const snap = await getDoc(ref);
       if (!snap.exists()) { activeMission = null; activeCode = ''; renderView('Invalid or revoked mission code: ' + code); return; }
       activeCode = code; localStorage.setItem(CREW_CODE_KEY, code);
+      recordNode(code, snap.data()?.title || code);
       crewUnsub = onSnapshot(ref, s => {
         if (!s.exists()) { activeMission = null; activeCode = ''; localStorage.removeItem(CREW_CODE_KEY); applyRoleLayout(); renderView('Mission code was revoked by Boss.'); return; }
         activeMission = { code: s.id, ...s.data() };
+        recordNode(s.id, activeMission.title || s.id);
         if (activeMission.holo) window.HeistBoard?.loadHoloState?.(activeMission.holo);
         applyRoleLayout(); renderView();
       });
@@ -184,17 +200,18 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
       const pct = allCards.length ? Math.round((doneCnt / allCards.length) * 100) : 0;
       const filtered = allCards.filter(c => crewFilter === 'ALL' ? true : crewFilter === 'DONE' ? c.status === 'DONE' : c.status !== 'DONE');
       host.innerHTML = `<div class='max-w-xl mx-auto space-y-3 pb-10'>
-        <div class='bg-zinc-900/95 border border-sky-500/45 rounded-2xl p-3.5 space-y-2 shadow-lg'>
-          <div class='flex items-center justify-between gap-2'><span class='text-[10px] font-mono uppercase tracking-widest text-sky-400'>Crew Field Deck</span><span class='text-[10px] font-mono text-zinc-400'>Code Access</span></div>
-          <div class='flex gap-2'>
-            <input id='crCodeIn' value='${esc(activeCode)}' placeholder='Mission code (e.g. THE-8YCVAS)' class='flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-mono uppercase text-white'>
+        <div class='bg-zinc-900/95 border border-sky-500/45 rounded-2xl p-3.5 space-y-2.5 shadow-lg'>
+          <div class='flex items-center justify-between gap-2'><span class='text-[10px] font-mono uppercase tracking-widest text-sky-400'>Saved Project Nodes</span><span class='text-[10px] font-mono text-zinc-400'>${savedNodes.length} Saved</span></div>
+          <div class='flex flex-wrap gap-1.5'>${savedNodes.map(n => `<div class='inline-flex items-center rounded-xl border ${n.code === activeCode ? 'bg-sky-600/30 border-sky-400 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-300'} overflow-hidden'><button data-picknode='${esc(n.code)}' class='px-2.5 py-1.5 text-[11px] font-black truncate max-w-[170px]'>${esc(n.title || n.code)}</button><button data-delnode='${esc(n.code)}' class='px-1.5 py-1.5 text-[10px] text-zinc-500 hover:text-rose-400 border-l border-zinc-800'>✕</button></div>`).join('') || `<span class='text-[11px] text-zinc-500'>No saved mission nodes yet.</span>`}</div>
+          <div class='flex gap-2 pt-1 border-t border-zinc-800'>
+            <input id='crCodeIn' value='${esc(activeCode)}' placeholder='Add / enter new code (e.g. ASYLUM-4F9K2M)' class='flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-mono uppercase text-white'>
             <button id='crJoinBtn' class='px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-black'>Load</button>
           </div>
           ${msg ? `<div class='text-[11px] font-mono text-rose-400'>${esc(msg)}</div>` : ''}
         </div>
         ${activeMission ? `<div class='bg-zinc-900/95 border border-cyan-500/40 rounded-2xl p-3.5 space-y-3 shadow-lg'>
           <div class='flex items-start justify-between gap-2'>
-            <div class='min-w-0'><div class='text-[10px] font-mono text-emerald-400'>MISSION ${esc(activeMission.code)} • ${doneCnt}/${allCards.length} (${pct}%)</div><div class='text-base font-black text-white truncate'>${esc(activeMission.title)}</div></div>
+            <div class='min-w-0'><div class='text-[10px] font-mono text-emerald-400'>NODE ${esc(activeMission.code)} • ${doneCnt}/${allCards.length} (${pct}%)</div><div class='text-base font-black text-white truncate'>${esc(activeMission.title)}</div></div>
             ${activeMission.holo ? `<button id='crOpenHolo' class='px-3 py-1.5 rounded-xl bg-cyan-600 text-white text-[11px] font-black shrink-0'>Room Holo ➔</button>` : ''}
           </div>
           <div class='w-full h-2 rounded-full bg-zinc-950 overflow-hidden border border-zinc-800'><div class='h-full bg-gradient-to-r from-sky-500 to-emerald-400 transition-all' style='width:${pct}%'></div></div>
@@ -203,15 +220,50 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
             <button data-cf='OPEN' class='cf-b px-2.5 py-1 rounded-lg text-[10px] font-black border ${crewFilter === 'OPEN' ? 'bg-amber-600/30 border-amber-400 text-amber-200' : 'bg-zinc-950 border-zinc-800 text-zinc-400'}'>Open (${allCards.length - doneCnt})</button>
             <button data-cf='DONE' class='cf-b px-2.5 py-1 rounded-lg text-[10px] font-black border ${crewFilter === 'DONE' ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200' : 'bg-zinc-950 border-zinc-800 text-zinc-400'}'>Done (${doneCnt})</button>
           </div>
-          <div class='space-y-2'>${filtered.map(c => { const isDone = c.status === 'DONE'; return `<div data-crst='${c.id}' class='p-3 rounded-xl border cursor-pointer transition-all ${isDone ? 'bg-emerald-950/30 border-emerald-500/45' : 'bg-zinc-950/95 border-zinc-800 hover:border-sky-500/40'}'><div class='flex items-center justify-between gap-2'><div class='flex items-center gap-2 min-w-0'><input type='checkbox' ${isDone ? 'checked' : ''} class='w-4 h-4 accent-emerald-500 pointer-events-none shrink-0'><span class='text-xs font-black ${isDone ? 'line-through text-emerald-300' : 'text-white'}'>${esc(c.title)}</span></div><span class='px-2 py-0.5 rounded text-[9px] font-mono font-black shrink-0 ${isDone ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}'>${c.status}</span></div>${c.notes ? `<div class='text-[11px] text-zinc-300 mt-1.5 pl-6 leading-relaxed'>${esc(c.notes)}</div>` : ''}</div>`; }).join('') || `<div class='p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-center text-xs text-zinc-500'>No tasks in this filter.</div>`}</div>
-        </div>` : `<div class='p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center text-xs text-zinc-400'>Blank slate. Enter a Mission Code above (or open a link from Boss) to load assigned work.</div>`}
+          <div class='space-y-2'>${filtered.map(c => {
+            const isDone = c.status === 'DONE';
+            const open = expandedIds.has(c.id);
+            return `<div class='rounded-xl border transition-all ${isDone ? 'bg-emerald-950/25 border-emerald-500/40' : 'bg-zinc-950/95 border-zinc-800'} overflow-hidden'>
+              <button data-expcard='${c.id}' class='w-full p-3 text-left flex items-center justify-between gap-2'>
+                <div class='min-w-0 flex-1'>
+                  <div class='text-xs font-black ${isDone ? 'line-through text-emerald-300' : 'text-white'}'>${esc(c.title)}</div>
+                  <div class='text-[10px] text-zinc-400 mt-0.5'>${open ? 'Tap to collapse details' : 'Tap to expand instructions &amp; specs'}</div>
+                </div>
+                <div class='flex items-center gap-1.5 shrink-0'>
+                  <span class='px-2 py-0.5 rounded text-[9px] font-mono font-black ${isDone ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}'>${c.status}</span>
+                  <span class='text-xs text-zinc-400'>${open ? '▴' : '▾'}</span>
+                </div>
+              </button>
+              ${open ? `<div class='px-3 pb-3 pt-1 border-t border-zinc-800/80 space-y-2.5'>
+                <div class='text-xs text-zinc-200 leading-relaxed whitespace-pre-line'>${esc(c.notes || 'No extra notes attached to this objective.')}</div>
+                ${c.link ? `<a href='${esc(c.link)}' target='_blank' rel='noopener noreferrer' class='block px-3 py-2 rounded-lg bg-sky-950/80 border border-sky-500/40 text-xs font-bold text-sky-300'>Open Reference Link ➔</a>` : ''}
+                <button data-setdone='${c.id}' class='w-full py-2 rounded-xl text-xs font-black ${isDone ? 'bg-zinc-800 border border-zinc-700 text-zinc-200' : 'bg-emerald-600 text-white'}'>${isDone ? 'Mark as OPEN Again' : '✓ Mark Objective Complete (DONE)'}</button>
+              </div>` : ''}
+            </div>`;
+          }).join('') || `<div class='p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-center text-xs text-zinc-500'>No tasks in this filter.</div>`}</div>
+        </div>` : `<div class='p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center text-xs text-zinc-400'>Blank slate. Enter a Mission Code above (or tap a saved project node) to load assigned work.</div>`}
       </div>`;
       $('crJoinBtn').onclick = () => loadMissionByCode($('crCodeIn').value);
       if ($('crOpenHolo')) $('crOpenHolo').onclick = () => window.HeistBoard?.switchTab?.('cad');
       host.querySelectorAll('.cf-b').forEach(b => b.onclick = () => { crewFilter = b.dataset.cf; renderView(); });
-      host.querySelectorAll('[data-crst]').forEach(el => el.onclick = async () => {
+      host.querySelectorAll('[data-picknode]').forEach(b => b.onclick = () => loadMissionByCode(b.dataset.picknode));
+      host.querySelectorAll('[data-delnode]').forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        const cd = b.dataset.delnode;
+        savedNodes = savedNodes.filter(x => x.code !== cd);
+        saveNodes();
+        if (activeCode === cd) { activeCode = ''; activeMission = null; localStorage.removeItem(CREW_CODE_KEY); }
+        renderView();
+      });
+      host.querySelectorAll('[data-expcard]').forEach(b => b.onclick = () => {
+        const id = b.dataset.expcard;
+        if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
+        renderView();
+      });
+      host.querySelectorAll('[data-setdone]').forEach(b => b.onclick = async e => {
+        e.stopPropagation();
         if (!db || !activeMission) return;
-        const cid = el.dataset.crst;
+        const cid = b.dataset.setdone;
         const cards = (activeMission.cards || []).map(c => c.id === cid ? { ...c, status: c.status === 'DONE' ? 'OPEN' : 'DONE' } : c);
         await updateDoc(doc(db, 'hb_missions', activeMission.code), { cards, updatedAt: Date.now() });
       });
@@ -272,9 +324,6 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, on
 
     window.HeistBoard = window.HeistBoard || {};
     window.HeistBoard.isCrewMode = inCrewView;
-    window.HeistBoard.syncCrewPins = async pins => {
-      if (activeMission?.code && db) await updateDoc(doc(db, 'hb_missions', activeMission.code), { 'holo.pins': pins, updatedAt: Date.now() }).catch(() => {});
-    };
 
     if (HAS_KEY) {
       const app = getApps().length ? getApps()[0] : initializeApp(CFG);
