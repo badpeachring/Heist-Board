@@ -175,16 +175,7 @@
     host.querySelectorAll('[data-step]').forEach(el => el.onclick = () => { state.done[el.dataset.step] = !state.done[el.dataset.step]; save(); renderAsylum(); });
   }
 
-  function switchTabUnified(tab) {
-    document.querySelectorAll('main > section').forEach(s => s.classList.toggle('hidden', s.id !== 'view-' + tab));
-    document.querySelectorAll('#mainTabs .tab-btn').forEach(b => {
-      const on = b.dataset.tab === tab;
-      b.className = on ? 'tab-btn px-3 py-1 rounded-lg bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs font-bold shrink-0' : 'tab-btn px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0';
-    });
-    if (tab === 'asylum') renderAsylum();
-    if (tab === 'cad' && window.HeistBoard?.openCad) window.HeistBoard.openCad();
-    if (tab === 'board' && window.HeistBoard?.renderAll) window.HeistBoard.renderAll();
-  }
+
 
 
     const btn = document.createElement('button');
