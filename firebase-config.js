@@ -1,6 +1,6 @@
 window.HEIST_BOSS_EMAIL = "sethmcnab13@gmail.com";
 window.HEIST_FIREBASE_CONFIG = {
-  apiKey: "PASTE_FULL_API_KEY_HERE",
+  apiKey: "AIzaSyBaAcBLfnUulVRxlGx8YKyXFQrm-fIYsms",
   authDomain: "skill-tree-4cffd.firebaseapp.com",
   projectId: "skill-tree-4cffd",
   storageBucket: "skill-tree-4cffd.firebasestorage.app",
