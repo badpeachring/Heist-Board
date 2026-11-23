@@ -186,9 +186,7 @@
     if (tab === 'board' && window.HeistBoard?.renderAll) window.HeistBoard.renderAll();
   }
 
-  function init() {
-    const nav = $('mainTabs'), main = document.querySelector('main');
-    if (!nav || !main || $('view-asylum')) return;
+
     const btn = document.createElement('button');
     btn.dataset.tab = 'asylum';
     btn.className = 'tab-btn px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold shrink-0';
